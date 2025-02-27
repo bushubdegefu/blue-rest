@@ -97,7 +97,6 @@ func ScheduledTasks() *tasks.Scheduler {
 	scheduler := tasks.New()
 
 
-
 	// // Add a task to move to Logs Directory Every Interval, Interval to Be Provided From Configuration File
 	gormLoggerfile, _ := database.GormLoggerFile()
 	//  App should not start
