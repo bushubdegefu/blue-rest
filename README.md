@@ -93,13 +93,13 @@ Fix any dependencies from the generated models and format the code.
 ### Generate Controller Endpoints
 
 ```bash
- blue-rest curd --type fiber
+ blue-rest crud --type fiber
 ```
 
 or
 
 ```bash
- blue-rest curd -t fiber
+ blue-rest crud -t fiber
 ```
 
 ### Enable Fiber Integration
@@ -154,7 +154,7 @@ Blue Rest – command-line tool to aid in structuring your Golang backend projec
 #### Commands:
 - **basic**       Generate a basic folder structure for a project.
 - **completion**  Generate the autocompletion script for the specified shell.
-- **curd**        Generate CRUD handlers based on GORM for the specified framework.
+- **crud**        Generate CRUD handlers based on GORM for the specified framework.
 - **echo**        Generate the basic structure file to start an app using Echo.
 - **fiber**       Generate basic structure files to start an app using Fiber.
 - **help**        Help about any command.

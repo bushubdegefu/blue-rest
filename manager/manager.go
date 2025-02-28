@@ -12,7 +12,7 @@ var (
 		Use:           "Blue Rest",
 		Short:         "Blue Rest – command-line tool to aid structure your golang backend projects with gorm and fiber/echo",
 		Long:          "Blue Rest – command-line tool to aid structure your golang backend projects with gorm and fiber/echo for SQL based projects",
-		Version:       "0.2.0",
+		Version:       "0.2.1",
 		SilenceErrors: true,
 		SilenceUsage:  true,
 	}

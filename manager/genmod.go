@@ -10,7 +10,7 @@ import (
 var (
 	config_file string
 	curdcli     = &cobra.Command{
-		Use:   "curd",
+		Use:   "crud",
 		Short: "Generate CRUD handlers based on GORM for the specified framework",
 		Long:  `This command generates only the CRUD handlers using GORM, based on the provided spec, for either the Echo or Fiber framework.`,
 		Run: func(cmd *cobra.Command, args []string) {
