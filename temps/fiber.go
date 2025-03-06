@@ -132,7 +132,7 @@ func dbsessioninjection(ctx *fiber.Ctx) error {
 }
 
 func NextFunc(contx *fiber.Ctx) error {
-	return contx.Next()
+	return nil
 }
 
 // this is path filter which wavies token requirement for provided paths
@@ -255,6 +255,10 @@ func fiber_run(env string) {
 	// fiber native monitoring metrics endpoint
 	app.Get("/lmetrics", monitor.New(monitor.Config{Title: "goBlue Metrics Page"})).Name("custom_metrics_route")
 
+	// Setting up Resourse Endpoints
+	// Setting up Endpoints
+	SetupRoutes(app, false)
+
 	// Starting the APP
 	go startServer(app)
 
@@ -313,7 +317,7 @@ func init() {
 }
 
 
-func SetupRoutes(app *fiber.App) {
+func SetupRoutes(app *fiber.App, test bool) {
 
 	//app logging open telemetery
 	app.Use(otelfiber.Middleware())
@@ -322,12 +326,20 @@ func SetupRoutes(app *fiber.App) {
 	// database session injection to local context
 	app.Use(dbsessioninjection)
 
-	// Role Middleware
+	// Authentication Middleware
 	gapp := app.Group("/api/v1", keyauth.New(keyauth.Config{
 		Next:      authFilter,
 		KeyLookup: "header:X-APP-TOKEN",
 		Validator: NextRoute,
 	}))
+	if test {
+		// If test mode is enabled, skip the keyauth middleware and allow all requests
+		gapp = app.Group("/api/v1", func(contx *fiber.Ctx) error {
+			// Skipping validation and letting the request proceed
+			contx.Next()
+			return nil // Allow request to continue without authentication
+		})
+	}
 
 	{{range .Models}}
 	gapp.Get("/{{.LowerName}}",NextFunc).Name("get_all_{{.LowerName}}s").Get("/{{.LowerName}}", controllers.Get{{.Name}}s)

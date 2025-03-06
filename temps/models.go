@@ -120,49 +120,92 @@ var gmodelTemplate = `
 package models
 
 import (
-	"database/sql"
 	"time"
-	"github.com/google/uuid"
 	"gorm.io/gorm"
-
+	{{- $break_3 := false }}
+	{{- range .Fields}}
+	{{- if eq .Name "UUID" }}
+	"github.com/google/uuid"
+	{{- $break_3 = true }}
+	{{- end}}
+	{{- end}}
+	{{- $break_2 := false }}
+	{{- range .Fields}}
+	{{- if eq .Type "sql.NullInt64" }}
+	"database/sql"
+	{{- $break_2 = true }}
+	{{- end}}
+	{{- end}}
 )
 
 // {{.Name}} Database model info
 // @Description App type information
 type {{.Name}} struct {
+// The following fields will be ignored by Swagger
+   CreatedAt time.Time {{.BackTick}}json:"created_at,omitempty"{{.BackTick}}
+   UpdatedAt time.Time {{.BackTick}}json:"updated_at,omitempty"{{.BackTick}}
+    {{range .Fields}} {{.Name}} {{.Type}}  {{.BackTick}}{{.Annotation}}{{.BackTick}}
+{{end}}}
 
-	{{range .Fields}} {{.Name}} {{.Type}}  {{.BackTick}}{{.Annotation}}{{.BackTick}}
-	{{end}}}
+{{- $hasUUID := false }}
+{{- range .Fields}}
+    {{- if eq .Name "UUID" }}
+        {{- $hasUUID = true }}
+    {{- end }}
+{{- end }}
 
+{{- if not $hasUUID }}
+    func (entity *{{.Name}}) BeforeCreate(tx *gorm.DB) (err error) {
+        entity.CreatedAt = time.Now()
+        return
+    }
+{{- end }}
+
+{{- $break_4 := false }}
+{{- range .Fields}}
+{{- if eq .Name "UUID" }}
+func (entity *{{.NormalModelName}}) BeforeCreate(tx *gorm.DB) (err error) {
+	gen, _ := uuid.NewV7()
+	entity.CreatedAt = time.Now();
+	id := gen.String()
+	entity.UUID = id
+	return
+}
+{{- $break_4 = true }}
+{{- end}}
+{{- end}}
+
+func (entity *{{.Name}}) BeforeUpdate(tx *gorm.DB) (err error) {
+	entity.UpdatedAt = time.Now();
+	return
+}
 
 // {{.Name}}Post model info
 // @Description {{.Name}}Post type information
 type {{.Name}}Post struct {
-	{{range .Fields}} {{- if .Post}} {{.Name}} {{.Type}} {{.BackTick}}{{.Annotation}}{{.BackTick}}{{- end}}
-	{{end}}}
+  	{{range .Fields}} {{- if .Post}} {{.Name}} {{.Type}} {{.BackTick}}{{.Annotation}}{{.BackTick}}{{- end}}
+{{end}}}
 
 // {{.Name}}Get model info
 // @Description {{.Name}}Get type information
 type {{.Name}}Get struct {
 	{{range .Fields}} {{- if .Get}}	{{.Name}} {{.Type}}  {{.BackTick}}{{.Annotation}}{{.BackTick}} {{- end}}
 	{{end}}
-	// The following fields will be ignored by Swagger
-	CreatedAt   time.Time {{.BackTick}}swagger:"ignore"{{.BackTick}}  // remove if you want the fields in response swagger:ignore
-	UpdatedAt   time.Time {{.BackTick}}swagger:"ignore"{{.BackTick}}  // remove if you want the fields in response swagger:ignore
-	DeletedAt   time.Time {{.BackTick}}swagger:"ignore"{{.BackTick}}  // remove if you want the fields in responseswagger:ignore
-	}
+	CreatedAt time.Time {{.BackTick}}json:"created_at,omitempty"{{.BackTick}}
+	UpdatedAt time.Time {{.BackTick}}json:"updated_at,omitempty"{{.BackTick}}
+}
 
 // {{.Name}}Put model info
 // @Description {{.Name}}Put type information
 type {{.Name}}Put struct {
 	{{range .Fields}} {{- if .Put}} {{.Name}} {{.Type}}  {{.BackTick}}{{.Annotation}}{{.BackTick}}{{- end}}
-	{{end}}}
+{{end}}}
 
 // {{.Name}}Patch model info
 // @Description {{.Name}}Patch type information
 type {{.Name}}Patch struct {
 	{{range .Fields}}{{- if .Patch}}{{.Name}} {{.Type}}  {{.BackTick}}{{.Annotation}}{{.BackTick}}{{- end}}
-	{{end}}}
+{{end}}}
 `
 
 var migrationFuncTemplate = `
@@ -176,15 +219,17 @@ import (
 	"{{.ProjectName}}/configs"
 )
 
-func InitDatabase() {
-	configs.NewEnvFile("./configs")
+func InitDatabase(test_flag bool) {
+	if !test_flag {
+		configs.NewEnvFile("./configs")
+	}
 	database, err  := database.ReturnSession()
 	fmt.Println("Connection Opened to Database")
 	if err == nil {
 		if err := database.AutoMigrate(
-			{{range .Models}}
+			{{- range .Models}}
 			&{{.Name}}{},
-			{{end}}
+			{{- end}}
 		); err != nil {
 			log.Fatalln(err)
 		}
@@ -194,8 +239,10 @@ func InitDatabase() {
 	}
 }
 
-func CleanDatabase() {
-	configs.NewEnvFile("./configs")
+func CleanDatabase(test_flag bool) {
+	if !test_flag {
+		configs.NewEnvFile("./configs")
+	}
 	database, err := database.ReturnSession()
 	if err == nil {
 		fmt.Println("Connection Opened to Database")
@@ -239,7 +286,7 @@ var (
 
 func GormLoggerFile() (*os.File,error) {
 
-	gormLogFile, gerr := os.OpenFile("gormblue.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	gormLogFile, gerr := os.OpenFile("blue-gorm.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if gerr != nil {
 		log.Fatalf("error opening file: %v", gerr)
 	}

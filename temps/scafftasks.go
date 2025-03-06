@@ -109,8 +109,8 @@ func ScheduledTasks() *tasks.Scheduler {
 			currentTime := time.Now()
 			FileName := fmt.Sprintf("%v-%v-%v-%v-%v", currentTime.Year(), currentTime.Month(), currentTime.Day(), currentTime.Hour(), currentTime.Minute())
 			//  make sure to replace the names of log files correctly here
-			Command := fmt.Sprintf("cp goblue.log logs/blue-%v.log", FileName)
-			Command2 := fmt.Sprintf("cp blue-admin.log logs/gorm-%v.log", FileName)
+			Command := fmt.Sprintf("cp blue-rest.log logs/blue-%v.log", FileName)
+			Command2 := fmt.Sprintf("cp blue-gorm.log logs/gorm-%v.log", FileName)
 			if _, err := exec.Command("bash", "-c", Command).Output(); err != nil {
 				fmt.Printf("error: %v\n", err)
 			}

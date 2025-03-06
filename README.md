@@ -29,7 +29,40 @@ or using shorthand:
 ```
 
 This command creates the Go module and a sample `config.json` file that defines your project’s attributes and data models for GORM annotations.
+ In the `config.json` file, the `crud` flag is used to specify which CRUD operations should include a particular field. The flag is a string with six boolean values separated by `$`, representing the following operations:
 
+1. **Get**: Include the field in GET requests.
+2. **Post**: Include the field in POST requests.
+3. **Patch**: Include the field in PATCH requests.
+4. **Put**: Include the field in PUT requests.
+5. **OtM**: Indicates if the field is a foreign key or a one-to-many relationship.
+6. **MtM**: Indicates if the field is a many-to-many relationship.
+
+For example, if the `crud` flag for a field `id` is `true$false$false$false$true$false`, it means:
+- The field should be included in GET requests.
+- The field should not be included in POST, PATCH, or PUT requests.
+- The field is a foreign key or a one-to-many relationship.
+- The field is not a many-to-many relationship.
+
+Additionally, in the `config.json` file, you can specify relationships for models using the `rln_model` field. This field should contain a list of relationships in the format `["ModelName$RelationshipType"]`. The supported relationship types are `otm` (one-to-many) and `mtm` (many-to-many). For each specified relationship, endpoints will be generated to add, remove, and get related entities.
+
+For example, if a model `User` has the following relationships:
+```json
+"rln_model": ["Role$otm", "Group$mtm"]
+```
+This configuration will generate endpoints to manage:
+- One-to-many relationships between `User` and `Role` (e.g., add, remove, and get roles for a user).
+- Many-to-many relationships between `User` and `Group` (e.g., add, remove, and get groups for a user).
+Additionally, you can specify the association table name for many-to-many relationships in the `rln_model` field. This is done by appending the table name after the relationship type, separated by a dollar sign. For example, `"Group$mtm$user_groups"` indicates a many-to-many relationship between `User` and `Group` using the `user_groups` table to join and form the SQL query.
+
+For example, if a model `User` has the following relationships:
+```json
+"rln_model": ["Role$otm", "Group$mtm$user_groups"]
+```
+This configuration will generate endpoints to manage:
+- One-to-many relationships between `User` and `Role` (e.g., add, remove, and get roles for a user).
+- Many-to-many relationships between `User` and `Group` using the `user_groups` table (e.g., add, remove, and get groups for a user).
+> **Note:** The `user_groups` table is an association table between `User` and `Group` models, used to manage many-to-many relationships for the above example.
 ### Generate Basic Components
 
 Generate different boilerplate components:
@@ -175,8 +208,8 @@ Use `Blue [command] --help` for more information about a command.
 - Middleware configurations need to be adjusted as per your application's needs. Currently, the middleware validates everything.
 
 ## Coming Soon
-
-- Testing templates for better boilerplate code coverage.
+- Support for MongoDB.
+- Better support for tests and tests for relationships.
 
 ## Echo Boilerplate Generation
 

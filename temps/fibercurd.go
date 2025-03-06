@@ -448,7 +448,7 @@ func Get{{.FieldName}}{{.ParentName}}s(contx  *fiber.Ctx) error {
 	var total int64
 
 	var	{{.LowerFieldName}}s []models.{{.FieldName}}
-	join_string := "INNER JOIN {{.LowerParentName}}_{{.LowerFieldName}}s ur ON {{.LowerFieldName}}s.id = ur.{{.LowerFieldName}}_id"
+	join_string := "INNER JOIN {{.TableName}} ur ON {{.LowerFieldName}}s.id = ur.{{.LowerFieldName}}_id"
 	filter_string := "{{.LowerParentName}}_id = ?"
 
 

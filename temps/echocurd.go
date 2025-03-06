@@ -172,7 +172,7 @@ func Get{{.Name}}ByID(contx echo.Context) error {
 // @Success 200 {object} common.ResponseHTTP{data=models.{{.Name}}Post}
 // @Failure 400 {object} common.ResponseHTTP{}
 // @Failure 500 {object} common.ResponseHTTP{}
-// @Router /{{.LowerName}}s [post]
+// @Router /{{.LowerName}} [post]
 func Post{{.Name}}(contx echo.Context) error {
 	//  Geting tracer
 		tracer := contx.Get("tracer").(*observe.RouteTracer)
@@ -505,7 +505,7 @@ func Get{{.FieldName}}{{.ParentName}}s(contx echo.Context) error {
 	var total int64
 
 	var	{{.LowerFieldName}}s []models.{{.FieldName}}
-	join_string := "INNER JOIN {{.LowerParentName}}_{{.LowerFieldName}}s ur ON {{.LowerFieldName}}s.id = ur.{{.LowerFieldName}}_id"
+	join_string := "INNER JOIN {{.TableName}} ur ON {{.LowerFieldName}}s.id = ur.{{.LowerFieldName}}_id"
 	filter_string := "{{.LowerParentName}}_id = ?"
 
 

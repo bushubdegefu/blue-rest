@@ -302,13 +302,13 @@ var targetJSONTemplate = `
   "models": [
     {
       "name": "Role",
-      "rln_model": ["User$mtm", "Feature$otm"],
+      "rln_model": ["User$mtm$user_roles", "Feature$otm"],
       "fields": [
         {
           "name": "ID",
           "type": "uint",
           "annotation": "gorm:\"primaryKey;autoIncrement:true\" json:\"id,omitempty\"",
-          "curd_flag": "true$false$true$true$false$false"
+          "curd_flag": "true$false$false$true$false$false"
         },
         {
           "name": "Name",
@@ -363,7 +363,7 @@ var targetJSONTemplate = `
           "name": "ID",
           "type": "uint",
           "annotation": "gorm:\"primaryKey;autoIncrement:true\" json:\"id,omitempty\"",
-          "curd_flag": "true$false$true$true$false$false"
+          "curd_flag": "true$false$false$true$false$false"
         },
         {
           "name": "Name",
@@ -393,13 +393,13 @@ var targetJSONTemplate = `
           "name": "Roles",
           "type": "[]Role",
           "annotation": "gorm:\"association_foreignkey:AppID constraint:OnUpdate:SET NULL OnDelete:SET NULL\" json:\"roles,omitempty\"",
-          "curd_flag": "true$false$false$false$true$false"
+          "curd_flag": "true$false$*gorm.Modelfalse$false$true$false"
         }
       ]
     },
     {
       "name": "User",
-      "rln_model": ["Role$mtm"],
+      "rln_model": ["Role$mtm$user_roles"],
       "fields": [
         {
           "name": "ID",

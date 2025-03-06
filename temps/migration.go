@@ -63,12 +63,12 @@ var (
 )
 
 func init_migrate() {
-	models.InitDatabase()
+	models.InitDatabase(false)
 	fmt.Println("Migrated Database Models sucessfully")
 }
 
 func clean_database() {
-	models.CleanDatabase()
+	models.CleanDatabase(false)
 	fmt.Println("Dropped Tables sucessfully")
 }
 

@@ -3,9 +3,11 @@ package temps
 import (
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"os"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 )
 
@@ -39,6 +41,7 @@ type Model struct {
 }
 
 type Relationship struct {
+	TableName       string  `json:"table_name"`
 	ParentName      string  `json:"parent_name"`
 	LowerParentName string  `json:"lower_parent_name"`
 	FieldName       string  `json:"field_name"`
@@ -52,26 +55,58 @@ type Relationship struct {
 }
 
 type Field struct {
-	ModelName       string `json:"model_name"`
-	Name            string `json:"name"`
-	LowerName       string `json:"lower_name"`
-	Type            string `json:"type"`
-	UpperType       string `json:"upper_type"`
-	Annotation      string `json:"annotation"`
-	MongoAnnotation string `json:"mongo_annotation"`
-	CurdFlag        string `json:"curd_flag"`
-	Get             bool   `json:"get"`
-	Post            bool   `json:"post"`
-	Patch           bool   `json:"patch"`
-	Put             bool   `json:"put"`
-	OtM             bool   `json:"otm"`
-	MtM             bool   `json:"mtm"`
-	ProjectName     string `json:"project_name"`
-	AppName         string `json:"app_name"`
-	BackTick        string `json:"back_tick"`
+	NormalModelName  string `json:"normal_model_name"`
+	ModelName        string `json:"model_name"`
+	Name             string `json:"name"`
+	LowerName        string `json:"lower_name"`
+	Type             string `json:"type"`
+	UpperType        string `json:"upper_type"`
+	Annotation       string `json:"annotation"`
+	MongoAnnotation  string `json:"mongo_annotation"`
+	CurdFlag         string `json:"curd_flag"`
+	Get              bool   `json:"get"`
+	Post             bool   `json:"post"`
+	Patch            bool   `json:"patch"`
+	Put              bool   `json:"put"`
+	OtM              bool   `json:"otm"`
+	MtM              bool   `json:"mtm"`
+	ProjectName      string `json:"project_name"`
+	AppName          string `json:"app_name"`
+	BackTick         string `json:"back_tick"`
+	RandomFeildValue string `json:"random_field_value"`
 }
 
 var RenderData Data
+
+// Generate random data for different field types
+func generateRandomValue(fieldType string) string {
+	switch fieldType {
+	case "string":
+		return fmt.Sprintf("\"%s\"", randomString(10)) // Random string of length 10
+	case "int", "int32", "int64":
+		return fmt.Sprintf("%d", rand.Intn(1000)) // Random int between 0 and 1000
+	case "float64":
+		return fmt.Sprintf("%f", rand.Float64()*100.0) // Random float between 0.0 and 100.0
+	case "bool":
+		return fmt.Sprintf("%t", rand.Intn(2) == 0) // Random bool
+	case "time.Time":
+		// Generate a random date/time within a certain range (e.g., last year to now)
+		start := time.Date(2020, time.January, 1, 0, 0, 0, 0, time.UTC)
+		end := time.Now()
+		duration := end.Sub(start)
+		randomDuration := time.Duration(rand.Int63n(int64(duration)))
+		randomTime := start.Add(randomDuration)
+		return fmt.Sprintf("\"%s\"", randomTime.Format(time.RFC3339))
+	case "ID":
+
+		return fmt.Sprintf("%v", rand.Intn(1000))
+	case "sql.NullInt64":
+		// Randomly decide if it should be valid or NULL
+		return fmt.Sprintf("%f", rand.Float64()*100.0)
+	default:
+		return "\"\""
+	}
+}
 
 func LoadData(file_name string) error {
 	if file_name == "" {
@@ -110,6 +145,7 @@ func LoadData(file_name string) error {
 			RenderData.Models[i].Fields[j].BackTick = "`"
 			cf := strings.Split(RenderData.Models[i].Fields[j].CurdFlag, "$")
 			RenderData.Models[i].Fields[j].ModelName = strings.ToLower(RenderData.Models[i].Name)
+			RenderData.Models[i].Fields[j].NormalModelName = RenderData.Models[i].Name
 			RenderData.Models[i].Fields[j].LowerName = strings.ToLower(RenderData.Models[i].Fields[j].Name)
 			RenderData.Models[i].Fields[j].UpperType = CapitalizeFirstLetter(RenderData.Models[i].Fields[j].Type)
 			RenderData.Models[i].Fields[j].Get, _ = strconv.ParseBool(cf[0])
@@ -119,12 +155,14 @@ func LoadData(file_name string) error {
 			RenderData.Models[i].Fields[j].AppName = RenderData.AppName
 			RenderData.Models[i].Fields[j].ProjectName = RenderData.ProjectName
 			RenderData.Models[i].Fields[j].BackTick = "`"
+			RenderData.Models[i].Fields[j].RandomFeildValue = generateRandomValue(RenderData.Models[i].Fields[j].Type)
 
 		}
 		//#####################################
 		rl_list := make([]Relationship, 0)
 		for k := 0; k < len(RenderData.Models[i].RlnModel); k++ {
 			rmf := strings.Split(RenderData.Models[i].RlnModel[k], "$")
+
 			cur_relation := Relationship{
 				ParentName:      RenderData.Models[i].Name,
 				LowerParentName: RenderData.Models[i].LowerName,
@@ -134,6 +172,9 @@ func LoadData(file_name string) error {
 				OtM:             rmf[1] == "otm",
 				MtO:             rmf[1] == "mto",
 				BackTick:        "`",
+			}
+			if len(rmf) > 2 {
+				cur_relation.TableName = rmf[2]
 			}
 			cur_relation.ParentFields = RenderData.Models[i].Fields
 			rl_list = append(rl_list, cur_relation)

@@ -20,11 +20,6 @@ var (
 				return
 			}
 
-			// Check if tests flag is enabled
-			if testFlag, _ := cmd.Flags().GetString("tests"); testFlag == "on" {
-				generateFiberTestFiles()
-			}
-
 			// Generate main fiber framework files
 			generateFiberFiles()
 		},
@@ -38,12 +33,6 @@ func generateFiberFiles() {
 	if err := exec.Command("swag", "init").Run(); err != nil {
 		fmt.Printf("error generating swagger: %v \n", err)
 	}
-	temps.CommonCMD() // Common command structure
-}
-
-func generateFiberTestFiles() {
-	// Generate the test structure for Fiber
-	temps.TestFrameFiber()
 	temps.CommonCMD() // Common command structure
 }
 

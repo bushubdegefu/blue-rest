@@ -97,7 +97,7 @@ func otelechospanstarter(next echo.HandlerFunc) echo.HandlerFunc {
 			return err
 		}
 
-		span.SetAttributes(attribute.String("response", string(ctx.Response().Status)))
+		span.SetAttributes(attribute.String("response", fmt.Sprintf("%v", ctx.Response().Status)))
 		span.End()
 		return nil
 	}
@@ -172,6 +172,9 @@ func echo_run(env string) {
 
 	app.GET("/docs/*", echoSwagger.WrapHandler)
 
+	// Setting up Endpoints
+	SetupRoutes(app, false)
+
 	// Start the server
 	go startServer(app)
 
@@ -194,6 +197,7 @@ func waitForShutdown(app *echo.Echo, sccheduledTasks *tasks.Scheduler, ctx conte
 
 	// Block and wait for an interrupt signal (this will block until the signal is received).
 	<-ctx.Done()
+	fmt.Println("Gracefully shutting down...")
 
 	// Once the interrupt signal is received, create a new context with a 10-second timeout.
 	// This will allow time for any active requests to complete before forcing shutdown.
@@ -203,7 +207,7 @@ func waitForShutdown(app *echo.Echo, sccheduledTasks *tasks.Scheduler, ctx conte
 	// Attempt to gracefully shut down the Echo server.
 	// If an error occurs during the shutdown process, log the fatal error.
 	if err := app.Shutdown(ctx); err != nil {
-		app.Logger.Fatal(err)
+		fmt.Println(err)
 	}
 
 	// Stop scheduler after shutdown.
@@ -233,7 +237,7 @@ func init() {
 }
 
 
-func SetupRoutes(app *echo.Echo) {
+func SetupRoutes(app *echo.Echo, test bool) {
 	// the Otel spanner middleware
 	app.Use(otelechospanstarter)
 
@@ -242,11 +246,13 @@ func SetupRoutes(app *echo.Echo) {
 
 	gapp := app.Group("/api/v1")
 
-	// Authentication middleware
-	gapp.Use(middleware.KeyAuthWithConfig(middleware.KeyAuthConfig{
-		KeyLookup: "header:x-app-token",
-		Validator: NextAuthValidator,
-	}))
+	if !test {
+		// Authentication middleware
+		gapp.Use(middleware.KeyAuthWithConfig(middleware.KeyAuthConfig{
+			KeyLookup: "header:x-app-token",
+			Validator: NextAuthValidator,
+		}))
+	}
 
 	{{range .Models}}
 	gapp.GET("/{{.LowerName}}", controllers.Get{{.Name}}s).Name = "get_all_{{.LowerName}}s"

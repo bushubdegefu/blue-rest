@@ -35,6 +35,9 @@ var (
 
 			// Run corresponding command based on the project type
 			switch projectType {
+			case "json":
+				moduleName, _ := cmd.Flags().GetString("name")
+				temps.CommonTargetJSON(moduleName)
 			case "git":
 				basiccmd()
 			case "rsa":
@@ -121,6 +124,7 @@ func init() {
 	initalizemodule.Flags().StringP("name", "n", "", "Specify the module name  (github.com/someuser/someproject)")
 	// Register flags for the 'basic' command
 	basicCommand.Flags().StringP("type", "t", "", "Specify the type of folder structure to generate: rsa, db, producer, consumer, tasks, pagination")
+	basicCommand.Flags().StringP("name", "n", "", "Specify the project module name as in github.com/someuser/someproject for the json template genration")
 
 	goFrame.AddCommand(basicCommand)
 	goFrame.AddCommand(initalizemodule)
