@@ -9,6 +9,43 @@ To install Blue Rest, run:
 ```bash
  go install github.com/bushubdegefu/blue-rest@latest
 ```
+## Folder Structure Overview
+
+The Blue Rest CLI tool will generate a structured folder layout for your Golang backend project. Below is a sample folder structure:
+
+```
+fiber-sample/
+├── manager/
+│   ├── deveecho.go
+│   ├── consumer.go
+│   ├── manager.go
+│   └── migrate.go
+├── helper/
+├── messages/
+├── observe/
+├── config/
+├── database/
+├── bluetasks/
+├── testsettings/
+├── tests/
+└── controllers/
+```
+
+### Folder Descriptions
+
+- **manager/**: Contains the Cobra app and commands to start the application, manage consumers, and handle database migrations.
+- **helper/**: Utility functions that assist with various tasks across the project.
+- **messages/**: Defines the producer and consumer connections and functions for RabbitMQ.
+- **observe/**: Contains OpenTelemetry (OTel) Spanner functions for observability.
+- **config/**: Functions to manage environment variables defined in `.env` files.
+- **database/**: Database connection and configuration files.
+- **bluetasks/**: Scheduled tasks such as clearing logs.
+- **testsettings/**: Setup and configuration for testing.
+- **tests/**: Contains tests for CRUD operations.
+- **controllers/**: Model handler functions for CRUD operations and other functionalities. Custom handlers should also be added here.
+
+This basic structure is intended to serve as a project starter and should be edited based on your specific needs.
+
 
 ## Usage
 
@@ -92,6 +129,7 @@ or
 ```
 
 #### Message Producer
+This command generates a basic structure for a RabbitMQ key-value store. It creates helper functions for both producers and consumers using RabbitMQ. You should adjust these functions based on your specific needs, as they are provided as a "starter structure."
 
 ```bash
  blue-rest basic --type producer
@@ -142,9 +180,10 @@ or
 ```
 
 ### Run Migrations
+Run The cobra command line migration template generation flag.
 
 ```bash
- go run blue-rest migration
+ blue-rest migration
 ```
 
 After fixing dependencies, run:
@@ -158,6 +197,15 @@ For demo purposes, you can change the type of database you want to use. The supp
 ```bash
  go run main.go run migrate
 ```
+### Generate Tests for CRUD Operations
+
+Finally, you can generate tests for the CRUD operations of entities using the command:
+
+```bash
+ blue-rest test -f fiber
+```
+
+Note that these generated tests may still need some work after editing, but they provide a good starting point.
 
 Then start the server:
 
