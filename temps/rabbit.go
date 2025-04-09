@@ -172,6 +172,21 @@ func QeueConnect(queue_name string) (*amqp.Connection, *amqp.Channel, error) {
 		fmt.Printf("connectin to channel failed due to : %v\n", err)
 	}
 
+
+	// Declare a topic exchange
+	err = channel.ExchangeDeclare(
+		"blue-service",   // Exchange name
+		"blue",        // Type: "topic" for topic exchange
+		true,           // Durable (survive server restarts)
+		false,          // Auto-delete (delete when unused)
+		false,          // Internal (only used by RabbitMQ)
+		false,          // No-wait
+		nil,            // Arguments
+	)
+	if err != nil {
+		log.Fatalf("Failed to declare an exchange: %s", err)
+	}
+
 	// With the instance and declare Queues that we can
 	// publish and subscribe to.
 	_, err = channel.QueueDeclare(
@@ -199,7 +214,7 @@ package messages
 import (
 	"encoding/json"
 	"fmt"
-
+	"{{.ProjectName}}/observe"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
@@ -311,7 +326,7 @@ func RabbitConsumer(queue_name string) {
 	go func(msg <-chan amqp.Delivery) {
 		ctx := context.Background()
 
-		for msg := range msgs {
+			for msg := range msgs {
 			// Extract the span context out of the AMQP header.
 
 			switch msg.Type {

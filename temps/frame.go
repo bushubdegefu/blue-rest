@@ -7,7 +7,8 @@ import (
 )
 
 func Frame() {
-
+	InitProjectJSON()
+	RenderData.ProjectName = ProjectSettings.ProjectName
 	//  this is creating manger file inside the manager folder
 	// ############################################################
 	manager_tmpl, err := template.New("RenderData").Parse(managerTemplate)
@@ -55,8 +56,6 @@ func Frame() {
 	if err != nil {
 		fmt.Printf("Frame - 8: %v\n", err)
 	}
-
-	//  this is creating .env and configuration file
 	// ############################################################
 	config_tmpl, err := template.New("RenderData").Parse(configsTemplate)
 	if err != nil {
@@ -67,10 +66,6 @@ func Frame() {
 	err = os.MkdirAll("configs", os.ModePerm)
 	if err != nil {
 		fmt.Printf("Frame - 10: %v\n", err)
-	}
-	err = os.MkdirAll("tests", os.ModePerm)
-	if err != nil {
-		fmt.Printf("Frame - 11: %v\n", err)
 	}
 
 	config_file, err := os.Create("configs/configs.go")
@@ -97,25 +92,20 @@ func Frame() {
 	}
 	defer env_file.Close()
 
-	tenv_file, err := os.Create("tests/.env")
-	if err != nil {
-		fmt.Printf("Frame - 16: %v\n", err)
-	}
-	defer tenv_file.Close()
-
-	err = env_tmpl.Execute(tenv_file, RenderData)
-	if err != nil {
-		fmt.Printf("Frame - 17: %v\n", err)
-	}
-
 	err = env_tmpl.Execute(env_file, RenderData)
 	if err != nil {
 		fmt.Printf("Frame - 18: %v\n", err)
 	}
 
+	CommonCMD()
+}
+
+func EnvGenForApps() {
+	InitProjectJSON()
+
 	//  this is creating .env and configuration file
 	// ############################################################
-	devenv_tmpl, err := template.New("RenderData").Parse(devenvTemplate)
+	devenv_tmpl, err := template.New("RenderData").Funcs(FuncMap).Parse(devenvTemplate)
 	if err != nil {
 		fmt.Printf("Frame - 19: %v\n", err)
 	}
@@ -126,13 +116,13 @@ func Frame() {
 	}
 	defer devenv_file.Close()
 
-	err = devenv_tmpl.Execute(devenv_file, RenderData)
+	err = devenv_tmpl.Execute(devenv_file, ProjectSettings)
 	if err != nil {
 		fmt.Printf("Frame - 21: %v\n", err)
 	}
 
 	// ############################################################
-	prodenv_tmpl, err := template.New("RenderData").Parse(devenvTemplate)
+	prodenv_tmpl, err := template.New("RenderData").Funcs(FuncMap).Parse(devenvTemplate)
 	if err != nil {
 		fmt.Printf("Frame - 22: %v\n", err)
 	}
@@ -143,12 +133,37 @@ func Frame() {
 	}
 	defer prodenv_file.Close()
 
-	err = prodenv_tmpl.Execute(prodenv_file, RenderData)
+	err = prodenv_tmpl.Execute(prodenv_file, ProjectSettings)
 	if err != nil {
 		fmt.Printf("Frame - 24: %v\n", err)
 	}
+	CommonCMD()
+}
 
-	// ##########################################################
+func TestGenForApps() {
+	// Implement test generation logic here
+	err := os.MkdirAll("tests", os.ModePerm)
+	if err != nil {
+		fmt.Printf("Frame - 11: %v\n", err)
+	}
+	// ############################################################
+	env_tmpl, err := template.New("RenderData").Parse(envTemplate)
+	if err != nil {
+		fmt.Printf("Frame - 14: %v\n", err)
+	}
+
+	// ############################################################
+	tenv_file, err := os.Create("tests/.env")
+	if err != nil {
+		fmt.Printf("Frame - 16: %v\n", err)
+	}
+	defer tenv_file.Close()
+
+	err = env_tmpl.Execute(tenv_file, RenderData)
+	if err != nil {
+		fmt.Printf("Frame - 17: %v\n", err)
+	}
+	// ############################################################
 	testenv_tmpl, err := template.New("RenderData").Parse(devenvTemplate)
 	if err != nil {
 		fmt.Printf("Frame - 25: %v\n", err)
@@ -315,27 +330,13 @@ var envTemplate = `
 APP_ENV=dev
 `
 var devenvTemplate = `
-APP_NAME=dev
 HTTP_PORT=7500
-TEST_NAME="Development Development"
 BODY_LIMIT=70
 READ_BUFFER_SIZE=40
 RATE_LIMIT_PER_SECOND=5000
 
 #Interval in minutes
-CLEAR_LOGS_INTERVAL=1
-
-#Database config settings
-#DB_TYPE=postgres
-#POSTGRES_URI="host=localhost user=blueuser password=default dbname=learning_one port=5432 sslmode=disable"
-DB_TYPE="sqlite"
-SQLLITE_URI="blue-rest.db"
-#DB_TYPE="mysql"
-#MYSQL_URI="yenefivy_beimnet:bluenet%402025@tcp(109.70.148.37:3306)/gorm?charset=utf8&parseTime=True&loc=Local"
-
-#Messeage qeue settings specifically rabbit
-RABBIT_URI="amqps://xrqlluoo:4hAUYGqztMsWyFdT5r65j4xudTw-AWl1@puffin.rmq2.cloudamqp.com/xrqlluoo"
-
+CLEAR_LOGS_INTERVAL=120
 # JWT token settings
 JWT_SALT_LIFE_TIME=60 #in minutes
 JWT_SALT_LENGTH=25
@@ -343,10 +344,30 @@ JWT_SALT_LENGTH=25
 #RPC settings
 RPC_PORT=6500
 
-
 #Observability settings
 TRACE_EXPORTER=jaeger
 TRACER_HOST=localhost
 TRACER_PORT=14317
+
+
+{{- range .AppNames }}
+###################################################
+#  {{ . | replaceStringCapitalize }} Specfic Values
+###################################################
+{{ . | replaceStringCapitalize }}_APP_NAME=dev
+{{ . | replaceStringCapitalize }}_TEST_NAME="Development Development"
+
+#Database config settings
+#{{ . | replaceStringCapitalize }}_DB_TYPE=postgres
+#{{ . | replaceStringCapitalize }}_POSTGRES_URI="host=localhost user=blueuser password=default dbname=learning_one port=5432 sslmode=disable"
+{{ . | replaceStringCapitalize }}_DB_TYPE="sqlite"
+{{ . | replaceStringCapitalize }}_SQLLITE_URI="{{ . | replaceString}}_blue.db"
+#{{ . | replaceStringCapitalize }}_DB_TYPE="mysql"
+#{{ . | replaceStringCapitalize }}_MYSQL_URI="yenefivy_beimnet:bluenet%402025@tcp(109.70.148.37:3306)/gorm?charset=utf8&parseTime=True&loc=Local"
+
+#Messeage qeue settings specifically rabbit
+{{ . | replaceStringCapitalize}}_RABBIT_URI="amqps://xrqlluoo:4hAUYGqztMsWyFdT5r65j4xudTw-AWl1@puffin.rmq2.cloudamqp.com/xrqlluoo"
+
+{{- end }}
 
 `

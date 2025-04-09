@@ -2,6 +2,7 @@ package temps
 
 import (
 	"math/rand"
+	"strings"
 	"text/template"
 
 	"fmt"
@@ -19,9 +20,33 @@ func randomString(n int) string {
 	return string(result)
 }
 
+func formatSliceToString(slice []string) string {
+	// Wrap each element with double quotes
+	quotedSlice := make([]string, len(slice))
+	for i, v := range slice {
+		quotedSlice[i] = `"` + v + `"`
+	}
+
+	// Join the quoted elements with ", " separator
+	return strings.Join(quotedSlice, ", ")
+}
+
 // Generates a random email address
 func randomEmail() string {
 	return randomString(10) + "@example.com"
+}
+
+func replaceString(old string) string {
+	newStr := strings.ReplaceAll(old, "-", "_")
+	return newStr
+}
+
+func replaceStringCapitalize(old string) string {
+	// Replace all hyphens with underscores
+	newStr := strings.ReplaceAll(old, "-", "_")
+	// Capitalize the entire string
+	newStr = strings.ToUpper(newStr)
+	return newStr
 }
 
 // Generates a random UUID
@@ -87,17 +112,20 @@ func randomBool() bool {
 }
 
 var FuncMap = template.FuncMap{
-	"parseTime":     parseTime,           // Register custom function
-	"parseInt":      parseInt,            // Register custom function
-	"randomEmail":   randomEmail,         // Register random email function
-	"randomUUID":    randomUUID,          // Register random UUID function
-	"randomID":      randomID,            // Register random ID function
-	"randomUInt":    randomUInt,          // Register random uint function
-	"randomFloat64": randomFloat64,       // Register random float64 function
-	"randomFloat32": randomFloat32,       // Register random float32 function
-	"randomInt32":   randomInt32,         // Register random int32 function
-	"randomInt64":   randomInt64,         // Register random int64 function
-	"randomString":  randomGenericString, // Register random string function
-	"randomTime":    randomTime,          // Register random time function
-	"randomBool":    randomBool,          // Register random bool function
+	"parseTime":               parseTime,               // Register custom function
+	"parseInt":                parseInt,                // Register custom function
+	"randomEmail":             randomEmail,             // Register random email function
+	"randomUUID":              randomUUID,              // Register random UUID function
+	"randomID":                randomID,                // Register random ID function
+	"randomUInt":              randomUInt,              // Register random uint function
+	"randomFloat64":           randomFloat64,           // Register random float64 function
+	"randomFloat32":           randomFloat32,           // Register random float32 function
+	"randomInt32":             randomInt32,             // Register random int32 function
+	"randomInt64":             randomInt64,             // Register random int64 function
+	"randomString":            randomGenericString,     // Register random string function
+	"randomTime":              randomTime,              // Register random time function
+	"randomBool":              randomBool,              // Register random bool function
+	"replaceString":           replaceString,           // Register hyphen with underscore
+	"replaceStringCapitalize": replaceStringCapitalize, // Register hyphen with underscore
+	"formatSliceToString":     formatSliceToString,     // Register format slice to string function
 }

@@ -8,7 +8,7 @@ import (
 func TasksFrame() {
 	// ####################################################
 	//  rabbit template
-	tasks_tmpl, err := template.New("RenderData").Parse(tasksFileTemplate)
+	tasks_tmpl, err := template.New("RenderData").Funcs(FuncMap).Parse(tasksFileTemplate)
 	if err != nil {
 		panic(err)
 	}
@@ -34,18 +34,18 @@ func TasksFrame() {
 func LogFilesFrame() {
 	// ####################################################
 	// Log file For the APP
-	log_file_tmpl, err := template.New("RenderData").Parse(logFileTemplate)
+	log_file_tmpl, err := template.New("RenderData").Funcs(FuncMap).Parse(logFileTemplate)
 	if err != nil {
 		panic(err)
 	}
 
 	// Create the models directory if it does not exist
-	err = os.MkdirAll("bluetasks", os.ModePerm)
+	err = os.MkdirAll("logs", os.ModePerm)
 	if err != nil {
 		panic(err)
 	}
 
-	log_file_file, err := os.Create("bluetasks/logfile.go")
+	log_file_file, err := os.Create("logs/logfile.go")
 	if err != nil {
 		panic(err)
 	}
@@ -58,17 +58,19 @@ func LogFilesFrame() {
 }
 
 var logFileTemplate = `
-package bluetasks
+package logs
 
 import (
 	"log"
 	"os"
+	"fmt"
 )
 
-func Logfile() (*os.File, error) {
+func Logfile(app_name string) (*os.File, error) {
 
 	// Custom File Writer for logging
-	file, err := os.OpenFile("blue-rest.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	log_file_name := fmt.Sprintf("%s_blue.log", app_name)
+	file, err := os.OpenFile(log_file_name, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
 		log.Fatalf("error opening file: %v", err)
 		return nil, err
@@ -86,6 +88,7 @@ import (
 	"time"
 
 	"{{.ProjectName}}/configs"
+	"{{.ProjectName}}/logs"
 	"{{.ProjectName}}/database"
 
 	"github.com/madflojo/tasks"
@@ -98,9 +101,9 @@ func ScheduledTasks() *tasks.Scheduler {
 
 
 	// // Add a task to move to Logs Directory Every Interval, Interval to Be Provided From Configuration File
-	gormLoggerfile, _ := database.GormLoggerFile()
+	gormLoggerfile, _ := database.GormLoggerFile("{{ .AppName | replaceString }}")
 	//  App should not start
-	log_file, _ := Logfile()
+	log_file, _ := logs.Logfile("{{ .AppName | replaceString }}")
 	// Getting clear log interval from env
 	clearIntervalLogs, _ := strconv.Atoi(configs.AppConfig.GetOrDefault("CLEAR_LOGS_INTERVAL", "1440"))
 	if _, err := scheduler.Add(&tasks.Task{
@@ -109,8 +112,8 @@ func ScheduledTasks() *tasks.Scheduler {
 			currentTime := time.Now()
 			FileName := fmt.Sprintf("%v-%v-%v-%v-%v", currentTime.Year(), currentTime.Month(), currentTime.Day(), currentTime.Hour(), currentTime.Minute())
 			//  make sure to replace the names of log files correctly here
-			Command := fmt.Sprintf("cp blue-rest.log logs/blue-%v.log", FileName)
-			Command2 := fmt.Sprintf("cp blue-gorm.log logs/gorm-%v.log", FileName)
+			Command := fmt.Sprintf("cp {{ .AppName | replaceString }}_blue.log logs/{{ .AppName | replaceString }}_blue-%v.log", FileName)
+			Command2 := fmt.Sprintf("cp {{ .AppName | replaceString }}_gorm.log logs/{{ .AppName | replaceString }}_gorm-%v.log", FileName)
 			if _, err := exec.Command("bash", "-c", Command).Output(); err != nil {
 				fmt.Printf("error: %v\n", err)
 			}

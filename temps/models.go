@@ -9,21 +9,13 @@ import (
 
 func ModelDataFrame() {
 
-	// Open the JSON file
-	file, err := os.Open("config.json")
-	if err != nil {
-		fmt.Println("Error opening JSON file:", err)
-		return
-	}
-	defer file.Close() // Defer closing the file until the function returns
-
 	// ############################################################
-	models_tmpl, err := template.New("RenderData").Parse(gmodelTemplate)
+	models_tmpl, err := template.New("RenderData").Funcs(FuncMap).Parse(gmodelTemplate)
 	if err != nil {
 		panic(err)
 	}
 
-	migration_function_tmpl, err := template.New("RenderData").Parse(migrationFuncTemplate)
+	migration_function_tmpl, err := template.New("RenderData").Funcs(FuncMap).Parse(migrationFuncTemplate)
 	if err != nil {
 		panic(err)
 	}
@@ -63,36 +55,55 @@ func ModelDataFrame() {
 	}
 	defer init_file.Close()
 
-	//  creating database connection folder
 	// ############################################################
-	database_tmpl, err := template.New("RenderData").Parse(databaseTemplate)
+	helper_function_tmpl, err := template.New("RenderData").Parse(helperFunctionsTemplate)
 	if err != nil {
 		panic(err)
 	}
 
-	// create database folder if does not exist
-	err = os.MkdirAll("database", os.ModePerm)
+	helper_file, err := os.Create("models/helper.go")
 	if err != nil {
 		panic(err)
 	}
 
-	database_conn_file, err := os.Create("database/database.go")
+	err = helper_function_tmpl.Execute(helper_file, RenderData)
 	if err != nil {
 		panic(err)
 	}
-	defer database_conn_file.Close()
+	defer init_file.Close()
 
-	err = database_tmpl.Execute(database_conn_file, RenderData)
+}
+
+func MigrationInit() {
+
+	err := os.MkdirAll("models", os.ModePerm)
 	if err != nil {
 		panic(err)
 	}
+	// ############################################################
+	migration_function_tmpl, err := template.New("RenderData").Funcs(FuncMap).Parse(migrationFuncTemplate)
+	if err != nil {
+		panic(err)
+	}
+
+	init_file, err := os.Create("models/init.go")
+	if err != nil {
+		panic(err)
+	}
+
+	err = migration_function_tmpl.Execute(init_file, RenderData)
+	if err != nil {
+		panic(err)
+	}
+	defer init_file.Close()
+
 }
 
 func DbConnDataFrame() {
-
+	InitProjectJSON()
 	//  creating database connection folder
 	// ############################################################
-	database_tmpl, err := template.New("RenderData").Parse(databaseTemplate)
+	database_tmpl, err := template.New("RenderData").Funcs(FuncMap).Parse(databaseTemplate)
 	if err != nil {
 		panic(err)
 	}
@@ -109,7 +120,7 @@ func DbConnDataFrame() {
 	}
 	defer database_conn_file.Close()
 
-	err = database_tmpl.Execute(database_conn_file, RenderData)
+	err = database_tmpl.Execute(database_conn_file, ProjectSettings)
 	if err != nil {
 		panic(err)
 	}
@@ -121,6 +132,7 @@ package models
 
 import (
 	"time"
+	"fmt"
 	"gorm.io/gorm"
 	{{- $break_3 := false }}
 	{{- range .Fields}}
@@ -129,13 +141,8 @@ import (
 	{{- $break_3 = true }}
 	{{- end}}
 	{{- end}}
-	{{- $break_2 := false }}
-	{{- range .Fields}}
-	{{- if eq .Type "sql.NullInt64" }}
 	"database/sql"
-	{{- $break_2 = true }}
-	{{- end}}
-	{{- end}}
+	"log"
 )
 
 // {{.Name}} Database model info
@@ -154,8 +161,18 @@ type {{.Name}} struct {
     {{- end }}
 {{- end }}
 
+{{- $hasPassword := false }}
+{{- range .Fields}}
+    {{- if eq .Name "Password" }}
+        {{- $hasPassword = true }}
+    {{- end }}
+{{- end }}
+
 {{- if not $hasUUID }}
     func (entity *{{.Name}}) BeforeCreate(tx *gorm.DB) (err error) {
+    	{{- if $hasPassword }}
+   		entity.Password = HashFunc(entity.Password)
+    	{{- end }}
         entity.CreatedAt = time.Now()
         return
     }
@@ -169,6 +186,9 @@ func (entity *{{.NormalModelName}}) BeforeCreate(tx *gorm.DB) (err error) {
 	entity.CreatedAt = time.Now();
 	id := gen.String()
 	entity.UUID = id
+	{{- if $hasPassword }}
+  		entity.Password = HashFunc(entity.Password)
+   	{{- end }}
 	return
 }
 {{- $break_4 = true }}
@@ -178,6 +198,33 @@ func (entity *{{.NormalModelName}}) BeforeCreate(tx *gorm.DB) (err error) {
 func (entity *{{.Name}}) BeforeUpdate(tx *gorm.DB) (err error) {
 	entity.UpdatedAt = time.Now();
 	return
+}
+
+func (entity *{{.Name}}) Populate(tx *gorm.DB) {
+	// Create ContentType for User model
+	contentType := ContentType{
+		AppLabel: "{{ .AppName | replaceString }}",
+		Model:    "{{.LowerName}}",
+	}
+	if err := tx.Create(&contentType).Error; err != nil {
+		log.Fatalf("Failed to create ContentType: %v", err)
+	}
+
+	// Create Permissions for User model
+	permissions := []Permission{
+		{ContentTypeID: sql.NullInt64{Int64: int64(contentType.ID), Valid: true}, Codename: "{{ .AppName | replaceString }}_can_add_{{.LowerName}}"},
+		{ContentTypeID: sql.NullInt64{Int64: int64(contentType.ID), Valid: true}, Codename: "{{ .AppName | replaceString }}_can_view_{{.LowerName}}"},
+		{ContentTypeID: sql.NullInt64{Int64: int64(contentType.ID), Valid: true}, Codename: "{{ .AppName | replaceString }}_can_change_{{.LowerName}}"},
+		{ContentTypeID: sql.NullInt64{Int64: int64(contentType.ID), Valid: true}, Codename: "{{ .AppName | replaceString }}_can_delete_{{.LowerName}}"},
+	}
+
+	for _, permission := range permissions {
+		if err := tx.Create(&permission).Error; err != nil {
+			log.Fatalf("Failed to create Permission: %v", err)
+		}
+	}
+
+	fmt.Println("Populated ContentType and Permissions for {{.Name}} request actions successfully")
 }
 
 // {{.Name}}Post model info
@@ -223,7 +270,7 @@ func InitDatabase(test_flag bool) {
 	if !test_flag {
 		configs.NewEnvFile("./configs")
 	}
-	database, err  := database.ReturnSession()
+	database, err  := database.ReturnSession("{{ .AppName | replaceString }}")
 	fmt.Println("Connection Opened to Database")
 	if err == nil {
 		if err := database.AutoMigrate(
@@ -243,22 +290,99 @@ func CleanDatabase(test_flag bool) {
 	if !test_flag {
 		configs.NewEnvFile("./configs")
 	}
-	database, err := database.ReturnSession()
+	database, err := database.ReturnSession("{{ .AppName | replaceString }}")
 	if err == nil {
 		fmt.Println("Connection Opened to Database")
 		fmt.Println("Dropping Models if Exist")
 		database.Migrator().DropTable(
-		{{range .Models}}
+		{{- range .Models}}
 			&{{.Name}}{},
-		{{end}}
+		{{- end}}
 		)
-
 		fmt.Println("Database Cleaned")
 	} else {
 		panic(err)
 	}
 }
 
+{{if .AuthApp}}
+func CreateSuperUser() {
+	db, err := database.ReturnSession("blue_auth")
+	if err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
+	}
+	// Create the superuser
+	user := &User{
+		Username:    "superuser",
+		Email:       "superuser@mail.com",
+		Password:    "default@123",
+		IsSuperuser: true,
+		IsStaff:     true,
+		IsActive:    true,
+		FirstName:   "Super",
+		LastName:    "Admin",
+	}
+
+	// Insert the user into the database
+	if err := db.Create(user).Error; err != nil {
+		fmt.Printf("failed to create superuser: %v\n", err)
+	}
+	db.Commit()
+	fmt.Println("Superuser created successfully")
+
+}
+{{-end}}
+
+func Populate(test_flag bool) {
+	if !test_flag {
+		configs.NewEnvFile("./configs")
+	}
+	db, err := database.ReturnSession("blue_auth")
+	if err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
+	}
+	{{- range .Models}}
+		(&{{.Name}}{}).Populate(db)
+	{{- end}}
+}
+
+
+`
+
+var helperFunctionsTemplate = `
+package models
+
+import (
+	"crypto/sha512"
+	"encoding/hex"
+
+	"{{.ProjectName}}/configs"
+)
+
+// Combine password and salt then hash them using the SHA-512
+func HashFunc(password string) string {
+
+	// var salt []byte
+	// get salt from env variable
+	salt := []byte(configs.AppConfig.Get("SECRETE_SALT"))
+
+	// Convert password string to byte slice
+	var pwdByte = []byte(password)
+
+	// Create sha-512 hasher
+	var sha512 = sha512.New()
+
+	pwdByte = append(pwdByte, salt...)
+
+	sha512.Write(pwdByte)
+
+	// Get the SHA-512 hashed password
+	var hashedPassword = sha512.Sum(nil)
+
+	// Convert the hashed to hex string
+	var hashedPasswordHex = hex.EncodeToString(hashedPassword)
+	return hashedPasswordHex
+}
 
 `
 
@@ -270,6 +394,7 @@ import (
 	"os"
 	"time"
 	"fmt"
+	"strings"
 
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
@@ -284,22 +409,22 @@ var (
 	DBConn *gorm.DB
 )
 
-func GormLoggerFile() (*os.File,error) {
-
-	gormLogFile, gerr := os.OpenFile("blue-gorm.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+func GormLoggerFile(app_name string) (*os.File, error) {
+	log_file_name := fmt.Sprintf("%s_gorm.log", app_name)
+	gormLogFile, gerr := os.OpenFile(log_file_name, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if gerr != nil {
 		log.Fatalf("error opening file: %v", gerr)
 	}
-	return gormLogFile,nil
+	return gormLogFile, nil
 }
 
-func ReturnSession() (*gorm.DB,error) {
+func ReturnSession(app_name string) (*gorm.DB,error) {
 
 	//  setting up database connection based on DB type
-
-	app_env := configs.AppConfig.Get("DB_TYPE")
+	env_name := fmt.Sprintf("%s_DB_TYPE", strings.ToUpper(app_name))
+	app_env := configs.AppConfig.Get(env_name)
 	//  This is file to output gorm logger on to
-	gormlogger,_ := GormLoggerFile()
+	gormlogger,_ := GormLoggerFile(app_name)
 	gormFileLogger := log.Logger{}
 	gormFileLogger.SetOutput(gormlogger)
 	gormFileLogger.Writer()
@@ -323,7 +448,7 @@ func ReturnSession() (*gorm.DB,error) {
 	switch app_env {
 	case "postgres":
 		db, err := gorm.Open(postgres.New(postgres.Config{
-			DSN:                  configs.AppConfig.Get("POSTGRES_URI"),
+			DSN:                  configs.AppConfig.Get(fmt.Sprintf("%s_POSTGRES_URI", strings.ToUpper(app_name))),
 			PreferSimpleProtocol: true, // disables implicit prepared statement usage,
 
 		}), &gorm.Config{
@@ -346,7 +471,7 @@ func ReturnSession() (*gorm.DB,error) {
 		DBSession = db
 	case "sqlite":
 		//  this is sqlite connection
-		db, _ := gorm.Open(sqlite.Open(configs.AppConfig.Get("SQLLITE_URI")), &gorm.Config{
+		db, _ := gorm.Open(sqlite.Open(configs.AppConfig.Get(fmt.Sprintf("%s_SQLLITE_URI", strings.ToUpper(app_name)))), &gorm.Config{
 			DisableForeignKeyConstraintWhenMigrating: true,
 			Logger:                 newLogger,
 			SkipDefaultTransaction: true,
@@ -362,7 +487,7 @@ func ReturnSession() (*gorm.DB,error) {
 		DBSession = db
 	case "mysql":
 		db, _ := gorm.Open(mysql.New(mysql.Config{
-			DSN:                       configs.AppConfig.Get("MYSQL_URI"), // data source name
+			DSN:                       configs.AppConfig.Get(fmt.Sprintf("%s_MYSQL_URI", strings.ToUpper(app_name))), // data source name
 			DefaultStringSize:         256,                                // default size for string fields
 			DisableDatetimePrecision:  true,                               // disable datetime precision, which not supported before MySQL 5.6
 			DontSupportRenameIndex:    true,                               // drop & create when rename index, rename index not supported before MySQL 5.7, MariaDB
@@ -382,38 +507,8 @@ func ReturnSession() (*gorm.DB,error) {
 		sqlDB.SetMaxOpenConns(10)
 		sqlDB.SetConnMaxLifetime(5 * time.Second)
 		DBSession = db
-	case "":
-		//  this is sqlite connection
-		db, _ := gorm.Open(sqlite.Open("goframe-2.db"), &gorm.Config{
-			DisableForeignKeyConstraintWhenMigrating: true,
-			Logger:                 newLogger,
-			SkipDefaultTransaction: true,
-		})
-
-		sqlDB, err:= db.DB()
-		if err != nil {
-			fmt.Printf("Error during connecting to database: %v\n", err)
-			return nil, err
-		}
-		sqlDB.SetMaxOpenConns(10)
-		sqlDB.SetConnMaxLifetime(5 * time.Second)
-		DBSession = db
 	default:
-		//  this is sqlite connection
-		db, _ := gorm.Open(sqlite.Open(configs.AppConfig.Get("SQLITE_URI")), &gorm.Config{
-			DisableForeignKeyConstraintWhenMigrating: true,
-			Logger:                 newLogger,
-			SkipDefaultTransaction: true,
-		})
-
-		sqlDB, err:= db.DB()
-		if err != nil {
-			fmt.Printf("Error during connecting to database: %v\n", err)
-			return nil, err
-		}
-		sqlDB.SetMaxOpenConns(10)
-		sqlDB.SetConnMaxLifetime(5 * time.Second)
-		DBSession = db
+			return nil, fmt.Errorf("Database type not supported")
 
 	}
 

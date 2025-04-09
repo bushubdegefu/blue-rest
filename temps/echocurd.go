@@ -10,8 +10,9 @@ import (
 func CurdFrameEcho() {
 
 	// ############################################################
+	RenderData.AppName = replaceString(RenderData.AppName)
 
-	curd_tmpl, err := template.New("RenderData").Parse(curdTemplate)
+	curd_tmpl, err := template.New("RenderData").Funcs(FuncMap).Parse(curdTemplate)
 	if err != nil {
 		panic(err)
 	}
@@ -46,12 +47,15 @@ var curdTemplate = `
 package controllers
 
 import (
+	{{- $break_math := false }}
 	{{- range .Relations }}
 	{{- if .MtM}}
+	{{- $break_math = true }}
+	{{- end}}
+	{{- end}}
+	{{- if $break_math }}
 	"math"
-	{{- end}}
-	{{- end}}
-
+	{{ end }}
 	"net/http"
 	"strconv"
 
@@ -60,7 +64,8 @@ import (
 	"github.com/mitchellh/mapstructure"
 	"gorm.io/gorm"
 	"{{.ProjectName}}/common"
-	"{{.ProjectName}}/models"
+	"{{.ProjectName}}/{{.AppName}}/models"
+	"{{.ProjectName}}/{{.AppName}}/utils"
 	"{{.ProjectName}}/observe"
 )
 
@@ -74,9 +79,12 @@ import (
 // @Security Refresh
 // @Param page query int true "page"
 // @Param size query int true "page size"
+{{- range .SearchFields}}
+// @Param {{ . }} query string false "Search by {{ . }} optional field string"
+{{- end}}
 // @Success 200 {object} common.ResponsePagination{data=[]models.{{.Name}}Get}
 // @Failure 404 {object} common.ResponseHTTP{}
-// @Router /{{.LowerName}} [get]
+// @Router /{{.AppName | replaceString}}/{{.LowerName}} [get]
 func Get{{.Name}}s(contx echo.Context) error {
 	//  Geting tracer
 	tracer := contx.Get("tracer").(*observe.RouteTracer)
@@ -93,21 +101,46 @@ func Get{{.Name}}s(contx echo.Context) error {
 		})
 	}
 
+	// Getting search fields
+	searchTerm := make(map[string]any)
+		if err := contx.Bind(&searchTerm); err != nil {
+			return contx.JSON(http.StatusBadRequest, common.ResponseHTTP{
+				Success: false,
+				Message: err.Error(),
+				Data:    nil,
+			})
+		}
+
+	allowedKeys := []string{ {{.SearchFields | formatSliceToString}} }
+	filteredSearchTerm := common.FilterMapByKeys(searchTerm, allowedKeys)
+
 	//  Geting dbsession
      db := contx.Get("db").(*gorm.DB)
 
-	//  querying result with pagination using gorm function
-	result, err := common.PaginationPureModel(db, models.{{.Name}}{}, []models.{{.Name}}{}, uint(Page), uint(Limit), tracer.Tracer)
-	if err != nil {
-		return contx.JSON(http.StatusInternalServerError, common.ResponseHTTP{
-			Success: false,
-			Message: "Failed to get all {{.Name}}.",
-			Data:    "something",
-		})
+    if len(filteredSearchTerm) == 0 {
+		//  querying result with pagination using gorm function
+		result, err := common.PaginationPureModel(db, models.{{.Name}}{}, []models.{{.Name}}Get{}, uint(Page), uint(Limit), tracer.Tracer)
+		if err != nil {
+			return contx.JSON(http.StatusInternalServerError, common.ResponseHTTP{
+				Success: false,
+				Message: "Failed to get all {{.Name}}.",
+				Data:    "something",
+			})
+		}
+		// returning result if all the above completed successfully
+		return contx.JSON(http.StatusOK, result)
+	} else {
+		result, err := common.PaginationPureModelSearch(db, models.{{.Name}}{}, []models.{{.Name}}Get{}, uint(Page), uint(Limit), tracer.Tracer,filteredSearchTerm)
+		if err != nil {
+			return contx.JSON(http.StatusInternalServerError, common.ResponseHTTP{
+				Success: false,
+				Message: "Failed to get all {{.Name}}.",
+				Data:    "something",
+			})
+		}
+		// returning result if all the above completed successfully
+		return contx.JSON(http.StatusOK, result)
 	}
-
-	// returning result if all the above completed successfully
-	return contx.JSON(http.StatusOK, result)
 }
 
 // Get{{.Name}}ByID is a function to get a {{.Name}}s by ID
@@ -117,10 +150,10 @@ func Get{{.Name}}s(contx echo.Context) error {
 // @Security ApiKeyAuth
 // @Accept json
 // @Produce json
-// @Param id path int true "{{.Name}} ID"
+// @Param {{.LowerName}}_id path int true "{{.Name}} ID"
 // @Success 200 {object} common.ResponseHTTP{data=models.{{.Name}}Get}
 // @Failure 404 {object} common.ResponseHTTP{}
-// @Router /{{.LowerName}}/{{ "{" }}{{.LowerName}}_id{{ "}" }} [get]
+// @Router /{{.AppName | replaceString}}/{{.LowerName}}/{{ "{" }}{{.LowerName}}_id{{ "}" }} [get]
 func Get{{.Name}}ByID(contx echo.Context) error {
 	//  Geting tracer
 		tracer := contx.Get("tracer").(*observe.RouteTracer)
@@ -172,13 +205,13 @@ func Get{{.Name}}ByID(contx echo.Context) error {
 // @Success 200 {object} common.ResponseHTTP{data=models.{{.Name}}Post}
 // @Failure 400 {object} common.ResponseHTTP{}
 // @Failure 500 {object} common.ResponseHTTP{}
-// @Router /{{.LowerName}} [post]
+// @Router /{{.AppName | replaceString}}/{{.LowerName}} [post]
 func Post{{.Name}}(contx echo.Context) error {
 	//  Geting tracer
 		tracer := contx.Get("tracer").(*observe.RouteTracer)
 
 	//  Geting dbsession
-		db := contx.Get("db").(*gorm.DB)
+	db := contx.Get("db").(*gorm.DB)
 
 	// validator initialization
 	validate := validator.New()
@@ -242,20 +275,20 @@ func Post{{.Name}}(contx echo.Context) error {
 // @Security ApiKeyAuth
 // @Accept json
 // @Produce json
-// @Param {{.LowerName}} body models.{{.Name}}Post true "Patch {{.Name}}"
-// @Param id path int true "{{.Name}} ID"
-// @Success 200 {object} common.ResponseHTTP{data=models.{{.Name}}Post}
+// @Param {{.LowerName}} body models.{{.Name}}Patch true "Patch {{.Name}}"
+// @Param {{.LowerName}}_id path int true "{{.Name}} ID"
+// @Success 200 {object} common.ResponseHTTP{data=models.{{.Name}}Patch}
 // @Failure 400 {object} common.ResponseHTTP{}
 // @Failure 500 {object} common.ResponseHTTP{}
-// @Router /{{.LowerName}}/{{ "{" }}{{.LowerName}}_id{{ "}" }} [patch]
+// @Router /{{.AppName | replaceString}}/{{.LowerName}}/{{ "{" }}{{.LowerName}}_id{{ "}" }} [patch]
 func Patch{{.Name}}(contx echo.Context) error {
 	//  Geting tracer
-		tracer := contx.Get("tracer").(*observe.RouteTracer)
+	tracer := contx.Get("tracer").(*observe.RouteTracer)
 
 	//  Geting dbsession
-		db := contx.Get("db").(*gorm.DB)
+	db := contx.Get("db").(*gorm.DB)
 
-	//  initialize data validator
+	// validator initialization
 	validate := validator.New()
 
 	// validate path params
@@ -269,8 +302,8 @@ func Patch{{.Name}}(contx echo.Context) error {
 	}
 
 	// validate data struct
-	patch_{{.LowerName}} := new(models.{{.Name}}Patch)
-	if err := contx.Bind(&patch_{{.LowerName}}); err != nil {
+	patch_{{.LowerName}}_struct := new(models.{{.Name}}Patch)
+	if err := contx.Bind(&patch_{{.LowerName}}_struct); err != nil {
 		return contx.JSON(http.StatusBadRequest, common.ResponseHTTP{
 			Success: false,
 			Message: err.Error(),
@@ -278,14 +311,46 @@ func Patch{{.Name}}(contx echo.Context) error {
 		})
 	}
 
-	// then validating
-	if err := validate.Struct(patch_{{.LowerName}}); err != nil {
+	// then validate structure
+	if err := validate.Struct(patch_{{.LowerName}}_struct); err != nil {
 		return contx.JSON(http.StatusBadRequest, common.ResponseHTTP{
 			Success: false,
 			Message: err.Error(),
 			Data:    nil,
 		})
 	}
+
+	// validate data struct
+	patch_{{.LowerName}},err := utils.StructToMap(patch_{{.LowerName}}_struct)
+	if err != nil {
+		return contx.JSON(http.StatusBadRequest, common.ResponseHTTP{
+			Success: false,
+			Message: "Error Converting Struct to Map",
+			Data:    nil,
+		})
+	}
+
+	{{- $hasPassword := false }}
+	{{- range .Fields}}
+	    {{- if eq .Name "Password" }}
+	        {{- $hasPassword = true }}
+	    {{- end }}
+	{{- end }}
+	{{- if $hasPassword }}
+	// Check if password exists in the map
+	if password, exists := patch_{{.LowerName}}["password"]; exists {
+		// Convert the password to string and check the length
+		passwordStr := password.(string)
+
+		// If password length is greater than 25, hash it
+		if len(passwordStr) < 25 {
+			patch_{{.LowerName}}["password"] = models.HashFunc(passwordStr)
+		// If password is an empty string, delete it from the map
+		} else if passwordStr == "" || len(passwordStr) > 25 {
+			delete(patch_{{.LowerName}}, "password")
+		}
+	}
+    {{- end }}
 
 	// startng update transaction
 	var {{.LowerName}} models.{{.Name}}
@@ -303,7 +368,7 @@ func Patch{{.Name}}(contx echo.Context) error {
 	}
 
 	// Update the record
-	if err := db.WithContext(tracer.Tracer).Model(&{{.LowerName}}).UpdateColumns(*patch_{{.LowerName}}).Error; err != nil {
+	if err := db.WithContext(tracer.Tracer).Model(&{{.LowerName}}).Updates(patch_{{.LowerName}}).Error; err != nil {
 		tx.Rollback()
 		return contx.JSON(http.StatusInternalServerError, common.ResponseHTTP{
 			Success: false,
@@ -311,6 +376,9 @@ func Patch{{.Name}}(contx echo.Context) error {
 			Data:    nil,
 		})
 	}
+
+	// close transaction
+	tx.Commit()
 
 	// Return  success response
 	return contx.JSON(http.StatusOK, common.ResponseHTTP{
@@ -327,11 +395,11 @@ func Patch{{.Name}}(contx echo.Context) error {
 // @Security ApiKeyAuth
 // @Accept json
 // @Produce json
-// @Param id path int true "{{.Name}} ID"
+// @Param {{.LowerName}}_id path int true "{{.Name}} ID"
 // @Success 200 {object} common.ResponseHTTP{}
 // @Failure 404 {object} common.ResponseHTTP{}
 // @Failure 503 {object} common.ResponseHTTP{}
-// @Router /{{.LowerName}}/{{ "{" }}{{.LowerName}}_id{{ "}" }} [delete]
+// @Router /{{.AppName | replaceString}}/{{.LowerName}}/{{ "{" }}{{.LowerName}}_id{{ "}" }} [delete]
 func Delete{{.Name}}(contx echo.Context) error {
 	//  Geting tracer
 		tracer := contx.Get("tracer").(*observe.RouteTracer)
@@ -401,7 +469,7 @@ func Delete{{.Name}}(contx echo.Context) error {
 // @Param {{.LowerFieldName}}_id path int true "{{.FieldName}} ID"
 // @Param {{.LowerParentName}}_id path int true "{{.ParentName}} ID"
 // @Failure 400 {object} common.ResponseHTTP{}
-// @Router /{{.LowerFieldName}}{{.LowerParentName}}/{{ "{" }}{{.LowerFieldName}}_id{{ "}" }}/{{ "{" }}{{.LowerParentName}}_id{{ "}" }} [post]
+// @Router /{{$.AppName | replaceString}}/{{.LowerFieldName}}{{.LowerParentName}}/{{ "{" }}{{.LowerFieldName}}_id{{ "}" }}/{{ "{" }}{{.LowerParentName}}_id{{ "}" }} [post]
 func Add{{.FieldName}}{{.ParentName}}s(contx echo.Context) error {
 	//  Geting tracer
 	tracer := contx.Get("tracer").(*observe.RouteTracer)
@@ -454,7 +522,7 @@ func Add{{.FieldName}}{{.ParentName}}s(contx echo.Context) error {
 		tx.Rollback()
 		return contx.JSON(http.StatusNotFound, common.ResponseHTTP{
 			Success: false,
-			Message: "{{.ParentName}}ending {{.ParentName}} Failed",
+			Message: "{{.FieldName}} adding to {{.ParentName}} Failed",
 			Data:    err.Error(),
 		})
 	}
@@ -478,10 +546,9 @@ func Add{{.FieldName}}{{.ParentName}}s(contx echo.Context) error {
 // @Param page query int true "page"
 // @Param size query int true "page size"
 // @Success 200 {object} common.ResponsePagination{data=[]models.{{.FieldName}}Get}
-// @Param {{.LowerFieldName}}_id path int true "{{.FieldName}} ID"
 // @Param {{.LowerParentName}}_id path int true "{{.ParentName}} ID"
 // @Failure 400 {object} common.ResponseHTTP{}
-// @Router /{{.LowerFieldName}}{{.LowerParentName}}/{{ "{" }}{{.LowerFieldName}}_id{{ "}" }}/{{ "{" }}{{.LowerParentName}}_id{{ "}" }} [post]
+// @Router /{{$.AppName | replaceString}}/{{.LowerFieldName}}{{.LowerParentName}}/{{ "{" }}{{.LowerParentName}}_id{{ "}" }} [get]
 func Get{{.FieldName}}{{.ParentName}}s(contx echo.Context) error {
 	//  Geting tracer
 	tracer := contx.Get("tracer").(*observe.RouteTracer)
@@ -505,7 +572,7 @@ func Get{{.FieldName}}{{.ParentName}}s(contx echo.Context) error {
 	var total int64
 
 	var	{{.LowerFieldName}}s []models.{{.FieldName}}
-	join_string := "INNER JOIN {{.TableName}} ur ON {{.LowerFieldName}}s.id = ur.{{.LowerFieldName}}_id"
+	join_string := "FULL JOIN {{.TableName}} ur ON {{.LowerFieldName}}s.id = ur.{{.LowerFieldName}}_id"
 	filter_string := "{{.LowerParentName}}_id = ?"
 
 
@@ -527,19 +594,19 @@ func Get{{.FieldName}}{{.ParentName}}s(contx echo.Context) error {
 
 	// {{.LowerParentName}} to be added
 	//getting total number of items
-	if err := db.WithContext(tracer.Tracer).Model(&models.{{.FieldName}}{}).Joins(join_string).Where(filter_string, {{.LowerParentName}}_id).Count(&total); err != nil {
+	if err := db.WithContext(tracer.Tracer).Model(&models.{{.FieldName}}{}).Joins(join_string).Where(filter_string, {{.LowerParentName}}_id).Count(&total).Error; err != nil {
 			return contx.JSON(http.StatusBadRequest, common.ResponseHTTP{
 				Success: false,
-				Message: err.Error.Error(),
+				Message: err.Error(),
 				Data:    nil,
 			})
 	}
 
 	//  actual result query
-	if err := db.WithContext(tracer.Tracer).Model(&models.{{.FieldName}}{}).Joins(join_string).Where(filter_string, {{.LowerParentName}}_id).Order("id asc").Limit(int(Limit)).Offset(int(Page - 1)).Find(&{{.LowerFieldName}}s); err != nil {
+	if err := db.WithContext(tracer.Tracer).Model(&models.{{.FieldName}}{}).Joins(join_string).Where(filter_string, {{.LowerParentName}}_id).Order("id asc").Limit(int(Limit)).Offset(int(Page - 1)).Find(&{{.LowerFieldName}}s).Error; err != nil {
 			return contx.JSON(http.StatusBadRequest, common.ResponseHTTP{
 				Success: false,
-				Message: err.Error.Error(),
+				Message: err.Error(),
 				Data:    nil,
 			})
 	}
@@ -557,10 +624,111 @@ func Get{{.FieldName}}{{.ParentName}}s(contx echo.Context) error {
 	})
 }
 
+// Get {{.FieldName}}s of {{.ParentName}} Complement
+// @Summary Get {{.ParentName}} to {{.FieldName}} Complement
+// @Description Get {{.FieldName}} {{.ParentName}} Complement
+// @Tags {{.FieldName}}{{.ParentName}}s
+// @Security ApiKeyAuth
+// @Accept json
+// @Produce json
+// @Success 200 {object} common.ResponseHTTP{data=[]models.{{.FieldName}}Get}
+// @Param {{.LowerParentName}}_id path int true "{{.ParentName}} ID"
+// @Failure 400 {object} common.ResponseHTTP{}
+// @Router /{{$.AppName | replaceString}}/{{.LowerFieldName}}complement{{.LowerParentName}}/{{ "{" }}{{.LowerParentName}}_id{{ "}" }} [get]
+func Get{{.FieldName}}Complement{{.ParentName}}s(contx echo.Context) error {
+	//  Geting tracer
+	tracer := contx.Get("tracer").(*observe.RouteTracer)
+
+	//  Geting dbsession
+	db := contx.Get("db").(*gorm.DB)
+
+	var	{{.LowerFieldName}}s []models.{{.FieldName}}
+	join_string := "FULL JOIN {{.TableName}} ur ON {{.LowerFieldName}}s.id = ur.{{.LowerFieldName}}_id AND ur.{{.LowerParentName}}_id = ?"
+	filter_string := "ur.{{.LowerParentName}}_id IS NULL"
+
+
+	// validate path params
+	{{.LowerParentName}}_id, err := strconv.Atoi(contx.Param("{{.LowerParentName}}_id"))
+	if err != nil {
+		return contx.JSON(http.StatusBadRequest, common.ResponseHTTP{
+			Success: false,
+			Message: err.Error(),
+			Data:    nil,
+		})
+	}
+
+	//  actual result query
+	if err := db.WithContext(tracer.Tracer).Model(&models.{{.FieldName}}{}).Joins(join_string, {{.LowerParentName}}_id).Where(filter_string).Order("id ASC").Find(&{{.LowerFieldName}}s).Error; err != nil {
+			return contx.JSON(http.StatusBadRequest, common.ResponseHTTP{
+				Success: false,
+				Message: err.Error(),
+				Data:    nil,
+			})
+	}
+
+	// return value if transaction is sucessfull
+	return contx.JSON(http.StatusOK, common.ResponseHTTP{
+		Success: true,
+		Data:   {{.LowerFieldName}}s,
+		Message: "working",
+	})
+}
+
+// Get {{.FieldName}}s of {{.ParentName}} Not Complement
+// @Summary Get {{.ParentName}} to {{.FieldName}} Not Complement
+// @Description Get {{.FieldName}} {{.ParentName}} Not Complement
+// @Tags {{.FieldName}}{{.ParentName}}s
+// @Security ApiKeyAuth
+// @Accept json
+// @Produce json
+// @Success 200 {object} common.ResponseHTTP{data=[]models.{{.FieldName}}Get}
+// @Param {{.LowerParentName}}_id path int true "{{.ParentName}} ID"
+// @Failure 400 {object} common.ResponseHTTP{}
+// @Router /{{$.AppName | replaceString}}/{{.LowerFieldName}}noncomplement{{.LowerParentName}}/{{ "{" }}{{.LowerParentName}}_id{{ "}" }} [get]
+func Get{{.FieldName}}NonComplement{{.ParentName}}s(contx echo.Context) error {
+	//  Geting tracer
+	tracer := contx.Get("tracer").(*observe.RouteTracer)
+
+	//  Geting dbsession
+	db := contx.Get("db").(*gorm.DB)
+
+	var	{{.LowerFieldName}}s []models.{{.FieldName}}
+	join_string := "FULL JOIN {{.TableName}} ur ON {{.LowerFieldName}}s.id = ur.{{.LowerFieldName}}_id "
+	filter_string := "ur.{{.LowerParentName}}_id = ?"
+
+
+	// validate path params
+	{{.LowerParentName}}_id, err := strconv.Atoi(contx.Param("{{.LowerParentName}}_id"))
+	if err != nil {
+		return contx.JSON(http.StatusBadRequest, common.ResponseHTTP{
+			Success: false,
+			Message: err.Error(),
+			Data:    nil,
+		})
+	}
+
+	//  actual result query
+	if err := db.WithContext(tracer.Tracer).Model(&models.{{.FieldName}}{}).Joins(join_string).Where(filter_string,{{.LowerParentName}}_id).Order("id ASC").Find(&{{.LowerFieldName}}s).Error; err != nil {
+			return contx.JSON(http.StatusBadRequest, common.ResponseHTTP{
+				Success: false,
+				Message: err.Error(),
+				Data:    nil,
+			})
+	}
+
+	// return value if transaction is sucessfull
+	return contx.JSON(http.StatusOK, common.ResponseHTTP{
+		Success: true,
+		Data:   {{.LowerFieldName}}s,
+		Message: "working",
+	})
+}
+
+
 // Delete {{.ParentName}} to {{.FieldName}}
-// @Summary Add {{.ParentName}}
+// @Summary Delete {{.ParentName}}
 // @Description Delete {{.FieldName}} {{.ParentName}}
-// @Tags {{.FieldName}}s
+// @Tags {{.FieldName}}{{.ParentName}}s
 // @Security ApiKeyAuth
 // @Accept json
 // @Produce json
@@ -569,7 +737,7 @@ func Get{{.FieldName}}{{.ParentName}}s(contx echo.Context) error {
 // @Success 200 {object} common.ResponseHTTP{data=models.{{.ParentName}}Post}
 // @Failure 400 {object} common.ResponseHTTP{}
 // @Failure 500 {object} common.ResponseHTTP{}
-// @Router /{{.LowerFieldName}}{{.LowerParentName}}/{{ "{" }}{{.LowerFieldName}}_id{{ "}" }}/{{ "{" }}{{.LowerParentName}}_id{{ "}" }} [delete]
+// @Router /{{$.AppName | replaceString}}/{{.LowerFieldName}}{{.LowerParentName}}/{{ "{" }}{{.LowerFieldName}}_id{{ "}" }}/{{ "{" }}{{.LowerParentName}}_id{{ "}" }} [delete]
 func Delete{{.FieldName}}{{.ParentName}}s(contx echo.Context) error {
 	//  Geting tracer
 		tracer := contx.Get("tracer").(*observe.RouteTracer)
@@ -655,7 +823,7 @@ func Delete{{.FieldName}}{{.ParentName}}s(contx echo.Context) error {
 // @Success 200 {object} common.ResponsePagination{data=[]models.{{.FieldName}}Get}
 // @Param {{.LowerParentName}}_id path int true "{{.ParentName}} ID"
 // @Failure 400 {object} common.ResponseHTTP{}
-// @Router /{{.LowerFieldName}}{{.LowerParentName}}/{{ "{" }}{{.LowerFieldName}}_id{{ "}" }}/{{ "{" }}{{.LowerParentName}}_id{{ "}" }} [post]
+// @Router /{{$.AppName | replaceString}}/{{.LowerFieldName}}{{.LowerParentName}}/{{ "{" }}{{.LowerParentName}}_id{{ "}" }} [get]
 func Get{{.FieldName}}{{.ParentName}}s(contx echo.Context) error {
 	//  Geting tracer
 	tracer := contx.Get("tracer").(*observe.RouteTracer)
@@ -697,7 +865,6 @@ func Get{{.FieldName}}{{.ParentName}}s(contx echo.Context) error {
 			})
 	}
 
-
 	// return value if transaction is sucessfull
 	return contx.JSON(http.StatusOK, result)
 }
@@ -706,17 +873,16 @@ func Get{{.FieldName}}{{.ParentName}}s(contx echo.Context) error {
 // Add {{.FieldName}} to {{.ParentName}}
 // @Summary Add {{.FieldName}} to {{.ParentName}}
 // @Description Add {{.FieldName}} to {{.ParentName}}
-// @Tags {{.ParentName}}s
+// @Tags {{.FieldName}}{{.ParentName}}s
 // @Security ApiKeyAuth
 // @Accept json
 // @Produce json
 // @Param {{.LowerFieldName}}_id path int true "{{.ParentName}} ID"
 // @Param {{.LowerParentName}}_id query int true "{{.FieldName}} ID"
 // @Failure 400 {object} common.ResponseHTTP{}
-// @Router /{{.LowerParentName}}{{.LowerFieldName}}/{{ "{" }}{{.LowerFieldName}}_id{{ "}" }} [patch]
+// @Router /{{$.AppName | replaceString}}/{{.LowerParentName}}{{.LowerFieldName}}/{{ "{" }}{{.LowerFieldName}}_id{{ "}" }} [patch]
 func Add{{.FieldName}}{{.ParentName}}s(contx echo.Context) error {
 	//  Geting tracer
-//  Geting tracer
 	tracer := contx.Get("tracer").(*observe.RouteTracer)
 
 	//  Geting dbsession
@@ -778,14 +944,14 @@ func Add{{.FieldName}}{{.ParentName}}s(contx echo.Context) error {
 // Delete {{.ParentName}} {{.FieldName}}
 // @Summary Delete {{.ParentName}} {{.FieldName}}
 // @Description Delete {{.ParentName}} {{.FieldName}}
-// @Tags {{.ParentName}}s
+// @Tags {{.FieldName}}{{.ParentName}}s
 // @Security ApiKeyAuth
 // @Accept json
 // @Produce json
 // @Param {{.LowerFieldName}}_id path int true "{{.ParentName}} ID"
 // @Param {{.LowerParentName}}_id query int true "{{.FieldName}} ID"
 // @Failure 400 {object} common.ResponseHTTP{}
-// @Router /{{.LowerParentName}}{{.LowerFieldName}}/{{ "{" }}{{.LowerFieldName}}_id{{ "}" }} [delete]
+// @Router /{{$.AppName | replaceString}}/{{.LowerParentName}}{{.LowerFieldName}}/{{ "{" }}{{.LowerFieldName}}_id{{ "}" }} [delete]
 func Delete{{.FieldName}}{{.ParentName}}s(contx echo.Context) error {
 	//  Geting tracer
 		tracer := contx.Get("tracer").(*observe.RouteTracer)
@@ -843,8 +1009,6 @@ func Delete{{.FieldName}}{{.ParentName}}s(contx echo.Context) error {
 		Data:    {{.LowerParentName}},
 	})
 }
-
-
 {{- end}}
 {{- end}}
 

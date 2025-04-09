@@ -11,6 +11,13 @@ import (
 	"unicode"
 )
 
+var RenderData Data
+var ProjectSettings ProjectSetting
+
+func (d *Data) SetBackTick() {
+	d.BackTick = "`"
+}
+
 // CapitalizeFirstLetter capitalizes the first letter of the input string
 func CapitalizeFirstLetter(s string) string {
 	if len(s) == 0 {
@@ -23,25 +30,79 @@ func CapitalizeFirstLetter(s string) string {
 
 // Define a struct to match the structure of your JSON data
 type Data struct {
-	ProjectName string  `json:"project_name"`
-	AppName     string  `json:"app_name"`
-	BackTick    string  `json:"back_tick"`
-	Models      []Model `json:"models"`
+	ProjectName    string   `json:"project_name"`
+	FrameName      string   `json:"frame_name"`
+	AppName        string   `json:"app_name"`
+	PackageAppName string   `json:"package_app_name",`
+	BackTick       string   `json:"back_tick"`
+	Models         []Model  `json:"models"`
+	AppNames       []string `json:"app_names"`
+	AuthApp        bool     `json:"auth_app"`
+}
+
+type ProjectSetting struct {
+	ProjectName    string   `json:"project_name"`
+	AppNames       []string `json:"app_names"`
+	CurrentAppName string   `json:"current_app_name"`
+	BackTick       string   `json:"back_tick"`
+}
+
+// Function to check if a string exists in a slice
+func (p *ProjectSetting) Contains(str string) bool {
+	for _, item := range p.AppNames {
+		if item == str {
+			return true
+		}
+	}
+	return false
+}
+
+func (p *ProjectSetting) AppendAppName(appName string) error {
+	// Append the new app name to the AppNames slice
+	if p.Contains(appName) {
+		fmt.Println("App already Exists, pleease use another name")
+	} else {
+		p.AppNames = append(p.AppNames, appName)
+
+	}
+
+	// Marshal the updated struct into JSON
+	data, err := json.MarshalIndent(p, "", "  ")
+	if err != nil {
+		return fmt.Errorf("error marshalling struct to JSON: %v", err)
+	}
+
+	// Create or open the JSON file to save the updated struct
+	file, err := os.Create("project.json")
+	if err != nil {
+		return fmt.Errorf("error creating file: %v", err)
+	}
+	defer file.Close()
+
+	// Write the updated JSON data to the file
+	_, err = file.Write(data)
+	if err != nil {
+		return fmt.Errorf("error writing to file: %v", err)
+	}
+
+	return nil
 }
 
 type Model struct {
-	Name        string         `json:"name"`
-	LowerName   string         `json:"lower_name"`
-	RlnModel    []string       `json:"rln_model"` // value to one of the models defined in the config json file
-	BackTick    string         `json:"back_tick"`
-	Fields      []Field        `json:"fields"`
-	ProjectName string         `json:"project_name"`
-	AppName     string         `json:"app_name"`
-	Relations   []Relationship `json:"relations"`
+	Name         string         `json:"name"`
+	LowerName    string         `json:"lower_name"`
+	RlnModel     []string       `json:"rln_model"` // value to one of the models defined in the config json file
+	BackTick     string         `json:"back_tick"`
+	Fields       []Field        `json:"fields"`
+	ProjectName  string         `json:"project_name"`
+	AppName      string         `json:"app_name"`
+	SearchFields []string       `json:"search_fields"`
+	Relations    []Relationship `json:"relations"`
 }
 
 type Relationship struct {
 	TableName       string  `json:"table_name"`
+	AppName         string  `json:"app_name"`
 	ParentName      string  `json:"parent_name"`
 	LowerParentName string  `json:"lower_parent_name"`
 	FieldName       string  `json:"field_name"`
@@ -75,8 +136,6 @@ type Field struct {
 	BackTick         string `json:"back_tick"`
 	RandomFeildValue string `json:"random_field_value"`
 }
-
-var RenderData Data
 
 // Generate random data for different field types
 func generateRandomValue(fieldType string) string {
@@ -164,6 +223,7 @@ func LoadData(file_name string) error {
 			rmf := strings.Split(RenderData.Models[i].RlnModel[k], "$")
 
 			cur_relation := Relationship{
+				AppName:         RenderData.AppName,
 				ParentName:      RenderData.Models[i].Name,
 				LowerParentName: RenderData.Models[i].LowerName,
 				FieldName:       rmf[0],
@@ -182,5 +242,50 @@ func LoadData(file_name string) error {
 		}
 
 	}
+
 	return nil
+}
+
+func CommonProjectName(project_name string) {
+	// Marshal the struct into JSON
+	data, _ := json.MarshalIndent(&ProjectSetting{ProjectName: project_name}, "", "  ")
+	file, _ := os.Create("project.json")
+	_, err := file.Write(data)
+	if err != nil {
+		fmt.Println("Error writing to file:", err)
+	}
+}
+
+func GetProjectName() string {
+	file, err := os.Open("project.json")
+	if err != nil {
+		panic("Project not initialized: open project.json: no such file or directory")
+	}
+	defer file.Close() // Defer closing the file until the function returns
+
+	// Decode the JSON content into the data structure
+	decoder := json.NewDecoder(file)
+	err = decoder.Decode(&ProjectSettings)
+	if err != nil {
+		fmt.Println("Error decoding JSON:", err)
+		panic("project.json not found, please initialize it project folder")
+
+	}
+	return ProjectSettings.ProjectName
+}
+
+func InitProjectJSON() {
+	file, err := os.Open("project.json")
+	if err != nil {
+		fmt.Println("project.json not found, please initialize it project folder")
+	}
+	defer file.Close() // Defer closing the file until the function returns
+
+	// Decode the JSON content into the data structure
+	decoder := json.NewDecoder(file)
+	err = decoder.Decode(&ProjectSettings)
+	if err != nil {
+		fmt.Println("project.json not found, please initialize it project folder")
+
+	}
 }

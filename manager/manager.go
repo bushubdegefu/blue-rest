@@ -1,3 +1,4 @@
+
 package manager
 
 import (
@@ -9,10 +10,10 @@ import (
 
 var (
 	goFrame = &cobra.Command{
-		Use:           "Blue Rest",
-		Short:         "Blue Rest – command-line tool to aid structure your golang backend projects with gorm and fiber/echo",
-		Long:          "Blue Rest – command-line tool to aid structure your golang backend projects with gorm and fiber/echo for SQL based projects",
-		Version:       "0.2.4",
+		Use:           "AppMan",
+		Short:         "AppMan – command-line tool to aid structure you fiber backend projects with gorm",
+		Long:          "Manager File Framed by go frame",
+		Version:       "0.0.0",
 		SilenceErrors: true,
 		SilenceUsage:  true,
 	}

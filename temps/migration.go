@@ -7,8 +7,11 @@ import (
 
 func MigrationFrame() {
 	//  this is creating manger file inside the manager folder
+	RenderData.ProjectName = ProjectSettings.ProjectName
+	RenderData.AppNames = ProjectSettings.AppNames
+	RenderData.BackTick = "`"
 	// ############################################################
-	migration_tmpl, err := template.New("RenderData").Parse(migrationTemplate)
+	migration_tmpl, err := template.New("RenderData").Funcs(FuncMap).Parse(migrationTemplate)
 	if err != nil {
 		panic(err)
 	}
@@ -37,7 +40,9 @@ package manager
 
 import (
 	"fmt"
-	"{{.ProjectName}}/models"
+	{{- range .AppNames}}
+	{{ . | replaceString }} "{{$.ProjectName}}/{{ . }}/models"
+	{{- end }}
 	"github.com/spf13/cobra"
 )
 
@@ -45,35 +50,61 @@ var (
 	{{.AppName}}migrate= &cobra.Command{
 		Use:   "migrate",
 		Short: "Run Database Migration for found in init migration Models",
-		Long:  {{.BackTick}}Migrate to init database{{.BackTick}},
+		Long:  "Migrate to init database",
 		Run: func(cmd *cobra.Command, args []string) {
-			init_migrate()
+			// Check for the type flag
+			migrateType, _ := cmd.Flags().GetString("type")
+			if migrateType == "create" {
+				init_migrate()
+			} else {
+				populate_migrate()
+			}
 		},
 	}
 
 	{{.AppName}}clean= &cobra.Command{
 		Use:   "clean",
 		Short: "Drop Database Models for found in init migration Models",
-		Long:  {{.BackTick}}Drop Models found in the models definition{{.BackTick}},
+		Long:  "Drop Models found in the models definition",
 		Run: func(cmd *cobra.Command, args []string) {
 			clean_database()
+		},
+
+	createsuperuser = &cobra.Command{
+		Use:   "superuser",
+		Short: "Create super user",
+		Long:  "Create super user",
+		Run: func(cmd *cobra.Command, args []string) {
+			{{ .AppName }}.CreateSuperUser()
 		},
 	}
 
 )
 
 func init_migrate() {
-	models.InitDatabase(false)
+
+    {{- range .AppNames}}
+    {{ . | replaceString }}.InitDatabase(false)
+    {{- end }}
 	fmt.Println("Migrated Database Models sucessfully")
 }
 
+func populate_migrate() {
+    {{- range .AppNames}}
+	{{ . | replaceString }}.Populate(false)
+	{{- end}}
+	fmt.Println("Auth Populated Sucessfuly Database Models sucessfully")
+}
+
 func clean_database() {
-	models.CleanDatabase(false)
+	{{- range .AppNames}}
+	{{ . | replaceString }}.CleanDatabase(false)
+	{{- end}}
 	fmt.Println("Dropped Tables sucessfully")
 }
 
-
 func init() {
+	{{.AppName}}migrate.Flags().StringP("type", "t", "", "Specify create to \"create\" the models to database, and \"populate\" to populate default permissions and content types")
 	goFrame.AddCommand({{.AppName}}migrate)
 	goFrame.AddCommand({{.AppName}}clean)
 }
