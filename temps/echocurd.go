@@ -61,7 +61,6 @@ import (
 
 	"github.com/go-playground/validator/v10"
 	"github.com/labstack/echo/v4"
-	"github.com/mitchellh/mapstructure"
 	"gorm.io/gorm"
 	"{{.ProjectName}}/common"
 	"{{.ProjectName}}/{{.AppName}}/models"
@@ -174,8 +173,7 @@ func Get{{.Name}}ByID(contx echo.Context) error {
 
 	// Preparing and querying database using Gorm
 	var {{.LowerName}}s_get models.{{.Name}}Get
-	var {{.LowerName}}s models.{{.Name}}
-	if res := db.WithContext(tracer.Tracer).Model(&models.{{.Name}}{}).Where("id = ?", id).First(&{{.LowerName}}s); res.Error != nil {
+	if res := db.WithContext(tracer.Tracer).Model(&models.{{.Name}}{}).Where("id = ?", id).Scan(&{{.LowerName}}s_get); res.Error != nil {
 		return contx.JSON(http.StatusNotFound, common.ResponseHTTP{
 			Success: false,
 			Message: res.Error.Error(),
@@ -183,8 +181,6 @@ func Get{{.Name}}ByID(contx echo.Context) error {
 		})
 	}
 
-	// filtering response data according to filtered defined struct
-	mapstructure.Decode({{.LowerName}}s, &{{.LowerName}}s_get)
 
 	//  Finally returing response if All the above compeleted successfully
 	return contx.JSON(http.StatusOK, common.ResponseHTTP{

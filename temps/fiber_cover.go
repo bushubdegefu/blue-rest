@@ -26,6 +26,22 @@ func TestFrameFiber() {
 	if err != nil {
 		panic(err)
 	}
+	test_app_tmpl, err := template.New("RenderData").Funcs(FuncMap).Parse(testAppTemplate)
+	if err != nil {
+		panic(err)
+	}
+	//
+	test_app_file, err := os.Create("testsetting/settings.go")
+	if err != nil {
+		panic(err)
+	}
+
+	err = test_app_tmpl.Execute(test_app_file, RenderData)
+	if err != nil {
+		panic(err)
+	}
+	defer test_app_file.Close()
+	// ###################################################################
 
 	for _, model := range RenderData.Models {
 
@@ -43,22 +59,6 @@ func TestFrameFiber() {
 		test_file.Close()
 
 	}
-	// ###################################################################
-	test_app_tmpl, err := template.New("RenderData").Funcs(FuncMap).Parse(testAppTemplate)
-	if err != nil {
-		panic(err)
-	}
-	//
-	test_app_file, err := os.Create("testsetting/settings.go")
-	if err != nil {
-		panic(err)
-	}
-
-	err = test_app_tmpl.Execute(test_app_file, RenderData)
-	if err != nil {
-		panic(err)
-	}
-	defer test_app_file.Close()
 
 	// ###################################################################
 }
@@ -86,8 +86,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"{{.ProjectName}}/models"
-	"{{.ProjectName}}/testsetting"
+	{{ .AppName | replaceString }}_models "{{.ProjectName}}/{{.AppName}}/models"
+	{{ .AppName | replaceString }}_testsetting "{{.ProjectName}}/{{.AppName}}/testsetting"
 
 )
 
@@ -101,14 +101,14 @@ var tests{{.Name}}sPost = []struct {
 	description  string          // description of the test case
 	route        string          // route path to test
 	{{.LowerName}}_id      string          //path param
-	post_data    models.{{.Name}}Post // patch_data
+	post_data    {{ .AppName | replaceString }}_models.{{.Name}}Post // patch_data
 	expectedCode int             // expected HTTP status code
 }{
 	{
 		name:        "post {{.Name}} - 1",
 		description: "post {{.Name}} 1",
-		route:       testsetting.GroupPath+"/{{.LowerName}}",
-		post_data: models.{{.Name}}Post{
+		route:       {{ .AppName | replaceString }}_testsetting.GroupPath+"/{{.LowerName}}",
+		post_data: {{ .AppName | replaceString }}_models.{{.Name}}Post{
 			{{- range .Fields}} {{- if .Post}}
 			{{- if eq .Type "uint" }}
 			  {{.Name}}: {{randomUInt}},
@@ -121,7 +121,7 @@ var tests{{.Name}}sPost = []struct {
 			{{- else if eq .Type "bool" }}
 			  {{.Name}}: {{randomBool}},  // Assume RandomFeildValue is a string "true"/"false" and convert
 			{{- else}}
-			  {{.Name}}: {{.RandomFeildValue}},  // Default fallback
+			  {{.Name}}: "{{randomString}}",  // Default fallback
 			{{- end}}
 			{{- end}}
 			{{- end}}
@@ -131,8 +131,8 @@ var tests{{.Name}}sPost = []struct {
 	{
 		name:        "post {{.Name}} 2",
 		description: "post {{.Name}} 2",
-		route:       testsetting.GroupPath+"/{{.LowerName}}",
-		post_data: models.{{.Name}}Post{
+		route:       {{ .AppName | replaceString }}_testsetting.GroupPath+"/{{.LowerName}}",
+		post_data: {{ .AppName | replaceString }}_models.{{.Name}}Post{
 			{{- range .Fields}} {{- if .Post}}
 			{{- if eq .Type "uint" }}
 			  {{.Name}}: {{randomUInt}},
@@ -145,7 +145,7 @@ var tests{{.Name}}sPost = []struct {
 			{{- else if eq .Type "bool" }}
 			  {{.Name}}: {{randomBool}},  // Assume RandomFeildValue is a string "true"/"false" and convert
 			{{- else}}
-			  {{.Name}}: {{.RandomFeildValue}},  // Default fallback
+			  {{.Name}}: "{{randomString}}",  // Default fallback
 			{{- end}}
 			{{- end}}
 			{{- end}}
@@ -155,8 +155,8 @@ var tests{{.Name}}sPost = []struct {
 	{
 		name:        "post {{.Name}} 3",
 		description: "post {{.Name}} 3",
-		route:       testsetting.GroupPath+"/{{.LowerName}}",
-		post_data: models.{{.Name}}Post{
+		route:       {{ .AppName | replaceString }}_testsetting.GroupPath+"/{{.LowerName}}",
+		post_data: {{ .AppName | replaceString }}_models.{{.Name}}Post{
 			{{- range .Fields}} {{- if .Post}}
 			{{- if eq .Type "uint" }}
 			  {{.Name}}: {{randomUInt}},
@@ -169,7 +169,7 @@ var tests{{.Name}}sPost = []struct {
 			{{- else if eq .Type "bool" }}
 			  {{.Name}}: {{randomBool}},  // Assume RandomFeildValue is a string "true"/"false" and convert
 			{{- else}}
-			  {{.Name}}: {{.RandomFeildValue}},  // Default fallback
+			  {{.Name}}: "{{randomString}}",  // Default fallback
 			{{- end}}
 			{{- end}}
 			{{- end}}
@@ -179,21 +179,21 @@ var tests{{.Name}}sPost = []struct {
 	{
 		name:        "post {{.Name}} 4",
 		description: "post {{.Name}} 4",
-		route:       testsetting.GroupPath+"/{{.LowerName}}",
-		post_data: models.{{.Name}}Post{
+		route:       {{ .AppName | replaceString }}_testsetting.GroupPath+"/{{.LowerName}}",
+		post_data: {{ .AppName | replaceString }}_models.{{.Name}}Post{
 			{{- range .Fields}} {{- if .Post}}
 			{{- if eq .Type "uint" }}
 			  {{.Name}}: {{randomUInt}},
 			{{- else if eq .Type "time.Time" }}
 			  {{.Name}}: time.Now().Add(time.Duration(rand.Intn(1000000)) * time.Second),
 			{{- else if eq .Type "string" }}
-			  {{.Name}}: {{.RandomFeildValue}},  // Ensure quotes for string values
+			  {{.Name}}: "{{randomString}}",  // Ensure quotes for string values
 			{{- else if or (eq .Type "int") (eq .Type "float64") (eq .Type "uint") }}
 			  {{.Name}}: {{randomUInt}},  // Numeric types
 			{{- else if eq .Type "bool" }}
 			  {{.Name}}: {{randomBool}},  // Assume RandomFeildValue is a string "true"/"false" and convert
 			{{- else}}
-			  {{.Name}}: {{.RandomFeildValue}},  // Default fallback
+			  {{.Name}}: "{{randomString}}",  // Default fallback
 			{{- end}}
 			{{- end}}
 			{{- end}}
@@ -203,21 +203,21 @@ var tests{{.Name}}sPost = []struct {
 	{
 		name:        "post {{.Name}} 5",
 		description: "post {{.Name}} 5",
-		route:       testsetting.GroupPath+"/{{.LowerName}}",
-		post_data: models.{{.Name}}Post{
+		route:       {{ .AppName | replaceString }}_testsetting.GroupPath+"/{{.LowerName}}",
+		post_data: {{ .AppName | replaceString }}_models.{{.Name}}Post{
 			{{- range .Fields}} {{- if .Post}}
 			{{- if eq .Type "uint" }}
 			  {{.Name}}: {{randomUInt}},
 			{{- else if eq .Type "time.Time" }}
 			  {{.Name}}: time.Now().Add(time.Duration(rand.Intn(1000000)) * time.Second),
 			{{- else if eq .Type "string" }}
-			  {{.Name}}: {{.RandomFeildValue}},  // Ensure quotes for string values
+			  {{.Name}}: "{{randomString}}",  // Ensure quotes for string values
 			{{- else if or (eq .Type "int") (eq .Type "float64") (eq .Type "uint") }}
 			  {{.Name}}: {{randomUInt}},  // Numeric types
 			{{- else if eq .Type "bool" }}
 			  {{.Name}}: {{randomBool}},  // Assume RandomFeildValue is a string "true"/"false" and convert
 			{{- else}}
-			  {{.Name}}: {{.RandomFeildValue}},  // Default fallback
+			  {{.Name}}: "{{randomString}}",  // Default fallback
 			{{- end}}
 			{{- end}}
 			{{- end}}
@@ -231,14 +231,14 @@ var tests{{.Name}}sPatchID = []struct {
 	name         string           //name of string
 	description  string           // description of the test case
 	route        string           // route path to test
-	patch_data   models.{{.Name}}Patch // patch_data
+	patch_data   {{ .AppName | replaceString }}_models.{{.Name}}Patch // patch_data
 	expectedCode int              // expected HTTP status code
 }{
 	{
 		name:        "patch {{.Name}}s- 1",
 		description: "patch {{.Name}}s- 1",
-		route:       testsetting.GroupPath+"/{{.LowerName}}/1",
-		patch_data: models.{{.Name}}Patch{
+		route:       {{ .AppName | replaceString }}_testsetting.GroupPath+"/{{.LowerName}}/1",
+		patch_data: {{ .AppName | replaceString }}_models.{{.Name}}Patch{
 			{{- range .Fields}} {{- if .Patch}}
 			{{- if eq .Type "uint" }}
 			  {{.Name}}: {{randomUInt}},
@@ -251,7 +251,7 @@ var tests{{.Name}}sPatchID = []struct {
 			{{- else if eq .Type "bool" }}
 			  {{.Name}}: {{randomBool}},  // Assume RandomFeildValue is a string "true"/"false" and convert
 			{{- else}}
-			  {{.Name}}: {{.RandomFeildValue}},  // Default fallback
+			  {{.Name}}: {{randomString}},  // Default fallback
 			{{- end}}
 			{{- end}}
 			{{- end}}
@@ -261,8 +261,8 @@ var tests{{.Name}}sPatchID = []struct {
 	{
 		name:        "patch {{.Name}}s- 2",
 		description: "patch {{.Name}}s- 2",
-		route:       testsetting.GroupPath+"/{{.LowerName}}/2",
-		patch_data: models.{{.Name}}Patch{
+		route:       {{ .AppName | replaceString }}_testsetting.GroupPath+"/{{.LowerName}}/2",
+		patch_data: {{ .AppName | replaceString }}_models.{{.Name}}Patch{
 			{{- range .Fields}} {{- if .Patch}}
 			{{- if eq .Type "uint" }}
 			  {{.Name}}: {{randomUInt}},
@@ -275,7 +275,7 @@ var tests{{.Name}}sPatchID = []struct {
 			{{- else if eq .Type "bool" }}
 			  {{.Name}}: {{randomBool}},  // Assume RandomFeildValue is a string "true"/"false" and convert
 			{{- else}}
-			  {{.Name}}: {{.RandomFeildValue}},  // Default fallback
+			  {{.Name}}: {{randomString}},  // Default fallback
 			{{- end}}
 			{{- end}}
 			{{- end}}
@@ -285,8 +285,8 @@ var tests{{.Name}}sPatchID = []struct {
 	{
 		name:        "patch {{.Name}}s- 3",
 		description: "patch {{.Name}}s- 3",
-		route:       testsetting.GroupPath+"/{{.LowerName}}/1000",
-		patch_data: models.{{.Name}}Patch{
+		route:       {{ .AppName | replaceString }}_testsetting.GroupPath+"/{{.LowerName}}/1000",
+		patch_data: {{ .AppName | replaceString }}_models.{{.Name}}Patch{
 			{{- range .Fields}} {{- if .Patch}}
 			{{- if eq .Type "uint" }}
 			  {{.Name}}: {{randomUInt}},
@@ -299,7 +299,7 @@ var tests{{.Name}}sPatchID = []struct {
 			{{- else if eq .Type "bool" }}
 			  {{.Name}}: {{randomBool}},  // Assume RandomFeildValue is a string "true"/"false" and convert
 			{{- else}}
-			  {{.Name}}: {{.RandomFeildValue}},  // Default fallback
+			  {{.Name}}: "{{randomString}}",  // Default fallback
 			{{- end}}
 			{{- end}}
 			{{- end}}
@@ -321,19 +321,19 @@ var tests{{.Name}}sGet = []struct {
 	{
 		name:         "get {{.Name}}s- 1",
 		description:  "get {{.Name}}s- 1",
-		route:        testsetting.GroupPath+"/{{.LowerName}}?page=1&size=10",
+		route:        {{ .AppName | replaceString }}_testsetting.GroupPath+"/{{.LowerName}}?page=1&size=10",
 		expectedCode: 200,
 	},
 	{
 		name:         "get {{.Name}}s - 2",
 		description:  "get {{.Name}}s- 2",
-		route:        testsetting.GroupPath+"/{{.LowerName}}?page=0&size=-5",
+		route:        {{ .AppName | replaceString }}_testsetting.GroupPath+"/{{.LowerName}}?page=0&size=-5",
 		expectedCode: 400,
 	},
 	{
 		name:         "get {{.Name}}s- 3",
 		description:  "get {{.Name}}s- 3",
-		route:        testsetting.GroupPath+"/{{.LowerName}}?page=1&size=0",
+		route:        {{ .AppName | replaceString }}_testsetting.GroupPath+"/{{.LowerName}}?page=1&size=0",
 		expectedCode: 400,
 	},
 }
@@ -348,7 +348,7 @@ var tests{{.Name}}sGetByID = []struct {
 	{
 		name:         "get {{.Name}}s By ID  1",
 		description:  "get {{.Name}}s By ID  1",
-		route:        testsetting.GroupPath+"/{{.LowerName}}/1",
+		route:        {{ .AppName | replaceString }}_testsetting.GroupPath+"/{{.LowerName}}/1",
 		expectedCode: 200,
 	},
 
@@ -356,22 +356,22 @@ var tests{{.Name}}sGetByID = []struct {
 	{
 		name:         "get {{.Name}}s By ID  2",
 		description:  "get {{.Name}}s By ID  2",
-		route:        testsetting.GroupPath+"/{{.LowerName}}/-1",
+		route:        {{ .AppName | replaceString }}_testsetting.GroupPath+"/{{.LowerName}}/-1",
 		expectedCode: 404,
 	},
 	// Second test case
 	{
 		name:         "get {{.Name}}s By ID  3",
 		description:  "get {{.Name}}s By ID  3",
-		route:        testsetting.GroupPath+"/{{.LowerName}}/1000",
+		route:        {{ .AppName | replaceString }}_testsetting.GroupPath+"/{{.LowerName}}/1000",
 		expectedCode: 404,
 	},
 }
 
 func Test{{.Name}}operations(t *testing.T) {
 	// creating database for test
-	testsetting.SetupTestApp()
-	defer models.CleanDatabase(true)
+	{{ .AppName | replaceString }}_testsetting.SetupTestApp()
+	defer {{ .AppName | replaceString }}_models.CleanDatabase(true)
 
 
 	// test {{.Name}} Post Operations
@@ -386,11 +386,18 @@ func Test{{.Name}}operations(t *testing.T) {
 			req.Header.Set("X-APP-TOKEN", "hi")
 
 			// Sending the request using the test app
-			resp, err := testsetting.TestApp.Test(req, -1)
+			resp, err := {{ .AppName | replaceString }}_testsetting.TestApp.Test(req, -1)
 			if err != nil {
 				t.Fatalf("Error making request: %v", err)
 			}
-			defer resp.Body.Close() // Ensure we close the response body after reading it
+
+			// Ensure we close the response body after reading it
+			defer func(response *http.Response) {
+					err := response.Body.Close()
+					if err != nil {
+						t.Logf("Error closing response body: %v", err)
+					}
+				}(resp)
 
 			// Read the response body
 			body, err := io.ReadAll(resp.Body)
@@ -422,11 +429,18 @@ func Test{{.Name}}operations(t *testing.T) {
 			req.Header.Set("X-APP-TOKEN", "hi")
 
 			// Sending the request using the test app
-			resp, err := testsetting.TestApp.Test(req, -1)
+			resp, err := {{ .AppName | replaceString }}_testsetting.TestApp.Test(req, -1)
 			if err != nil {
 				t.Fatalf("Error making request: %v", err)
 			}
-			defer resp.Body.Close() // Ensure we close the response body after reading it
+
+			// Ensure we close the response body after reading it
+			defer func(response *http.Response) {
+					err := response.Body.Close()
+					if err != nil {
+						t.Logf("Error closing response body: %v", err)
+					}
+				}(resp)
 
 			// Read the response body
 			body, err := io.ReadAll(resp.Body)
@@ -454,11 +468,18 @@ func Test{{.Name}}operations(t *testing.T) {
 			req.Header.Set("X-APP-TOKEN", "hi")
 
 			// Sending the request using the test app
-			resp, err := testsetting.TestApp.Test(req, -1)
+			resp, err := {{ .AppName | replaceString }}_testsetting.TestApp.Test(req, -1)
 			if err != nil {
 				t.Fatalf("Error making request: %v", err)
 			}
-			defer resp.Body.Close() // Ensure we close the response body after reading it
+
+			// Ensure we close the response body after reading it
+			defer func(response *http.Response) {
+					err := response.Body.Close()
+					if err != nil {
+						t.Logf("Error closing response body: %v", err)
+					}
+				}(resp)
 
 			// Read the response body
 			body, err := io.ReadAll(resp.Body)
@@ -485,11 +506,18 @@ func Test{{.Name}}operations(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, test.route, nil)
 			req.Header.Set("X-APP-TOKEN", "hi")
 			// Sending the request using the test app
-			resp, err := testsetting.TestApp.Test(req, -1)
+			resp, err := {{ .AppName | replaceString }}_testsetting.TestApp.Test(req, -1)
 			if err != nil {
 				t.Fatalf("Error making request: %v", err)
 			}
-			defer resp.Body.Close() // Ensure we close the response body after reading it
+
+			// Ensure we close the response body after reading it
+			defer func(response *http.Response) {
+					err := response.Body.Close()
+					if err != nil {
+						t.Logf("Error closing response body: %v", err)
+					}
+				}(resp)
 
 			// Read the response body
 			body, err := io.ReadAll(resp.Body)
@@ -513,14 +541,21 @@ func Test{{.Name}}operations(t *testing.T) {
 
 	// test {{.Name}} Delete Operations
 	t.Run("Checking the Delete Request Path for {{.Name}}s", func(t *testing.T) {
-		test_route := fmt.Sprintf("%v/%v/%v",testsetting.GroupPath,"{{.LowerName}}",3)
+		test_route := fmt.Sprintf("%v/%v/%v",{{ .AppName | replaceString }}_testsetting.GroupPath,"{{.LowerName}}",3)
 		req_delete := httptest.NewRequest(http.MethodDelete, test_route,nil)
 		req_delete.Header.Set("X-APP-TOKEN", "hi")
 
 		// Add specfic headers if needed as below
 		req_delete.Header.Set("Content-Type", "application/json")
-		resp, _ := testsetting.TestApp.Test(req_delete)
-		defer resp.Body.Close() // Ensure we close the response body after reading it
+		resp, _ := {{ .AppName | replaceString }}_testsetting.TestApp.Test(req_delete)
+
+		// Ensure we close the response body after reading it
+		defer func(response *http.Response) {
+				err := response.Body.Close()
+				if err != nil {
+					t.Logf("Error closing response body: %v", err)
+				}
+			}(resp)
 
 		// Read the response body
 		body, err := io.ReadAll(resp.Body)
@@ -539,14 +574,21 @@ func Test{{.Name}}operations(t *testing.T) {
 	})
 
 	t.Run("Checking the Delete Request Path for  that does not exit", func(t *testing.T) {
-			test_route_1 := fmt.Sprintf("%v/%v/%v",testsetting.GroupPath,"{{.LowerName}}",1000000)
+			test_route_1 := fmt.Sprintf("%v/%v/%v",{{ .AppName | replaceString }}_testsetting.GroupPath,"{{.LowerName}}",1000000)
 			req_delete := httptest.NewRequest(http.MethodDelete, test_route_1,nil)
 			req_delete.Header.Set("X-APP-TOKEN", "hi")
 
 			// Add specfic headers if needed as below
 			req_delete.Header.Set("Content-Type", "application/json")
-			resp, _ := testsetting.TestApp.Test(req_delete)
-			defer resp.Body.Close() // Ensure we close the response body after reading it
+			resp, _ := {{ .AppName | replaceString }}_testsetting.TestApp.Test(req_delete)
+
+			// Ensure we close the response body after reading it
+			defer func(response *http.Response) {
+					err := response.Body.Close()
+					if err != nil {
+						t.Logf("Error closing response body: %v", err)
+					}
+				}(resp)
 
 			// Read the response body
 			body, err := io.ReadAll(resp.Body)
@@ -565,14 +607,21 @@ func Test{{.Name}}operations(t *testing.T) {
 			})
 
 	t.Run("Checking the Delete Request Path that is not valid", func(t *testing.T) {
-		test_route_2 := fmt.Sprintf("%v/%v/%v",testsetting.GroupPath,"{{.LowerName}}", "$$$")
+		test_route_2 := fmt.Sprintf("%v/%v/%v",{{ .AppName | replaceString }}_testsetting.GroupPath,"{{.LowerName}}", "$$$")
 		req_delete := httptest.NewRequest(http.MethodDelete, test_route_2, nil)
 		req_delete.Header.Set("X-APP-TOKEN", "hi")
 
 		// Add specfic headers if needed as below
 		req_delete.Header.Set("Content-Type", "application/json")
-		resp, _ := testsetting.TestApp.Test(req_delete)
-		defer resp.Body.Close() // Ensure we close the response body after reading it
+		resp, _ := {{ .AppName | replaceString }}_testsetting.TestApp.Test(req_delete)
+
+		// Ensure we close the response body after reading it
+		defer func(response *http.Response) {
+				err := response.Body.Close()
+				if err != nil {
+					t.Logf("Error closing response body: %v", err)
+				}
+			}(resp)
 
 		// Read the response body
 		body, err := io.ReadAll(resp.Body)
@@ -598,22 +647,26 @@ var testAppTemplate = `
 package testsetting
 
 import (
+	{{.AppName | replaceString }} "{{ .ProjectName }}/{{.AppName }}"
+	models "{{.ProjectName}}/{{.AppName | replaceString }}/models"
 	"github.com/gofiber/fiber/v2"
 	"github.com/joho/godotenv"
-	"{{.ProjectName}}/manager"
-	"{{.ProjectName}}/models"
 )
 
 var (
 	TestApp   *fiber.App
-	GroupPath = "/api/v1"
+	GroupPath = "/api/v1/{{.AppName | replaceString }}"
 )
 
 func SetupTestApp() {
-	godotenv.Load(".test.env")
+	err := godotenv.Load(".test.env")
+	if err != nil {
+		panic("Error loading .env file")
+	}
+
 	models.InitDatabase(true)
 	TestApp = fiber.New()
-	manager.SetupRoutes(TestApp,true)
+	{{.AppName | replaceString }}.SetupRoutes(TestApp)
 }
 
 

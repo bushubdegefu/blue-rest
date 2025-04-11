@@ -34,7 +34,7 @@ func runCrudCommand(cmd *cobra.Command, args []string) {
 	frame, _ := cmd.Flags().GetString("frame")
 	appName, _ := cmd.Flags().GetString("app")
 	temps.InitProjectJSON()
-	temps.RenderData.AppName = appName
+
 	if frame == "" {
 		fmt.Println("Error: --frame flag is required. Use --frame=echo or --frame=fiber.")
 		return
@@ -64,9 +64,9 @@ func runCrudCommand(cmd *cobra.Command, args []string) {
 
 // runModelsCommand handles the execution of the 'models' command
 func runModelsCommand(cmd *cobra.Command, args []string) {
+
 	modelsType, _ := cmd.Flags().GetString("type")
 	appName, _ := cmd.Flags().GetString("app")
-	appAuth, _ := cmd.Flags().GetBool("auth")
 
 	if appName == "" {
 		fmt.Println("Error: --app flag is required.")
@@ -78,10 +78,7 @@ func runModelsCommand(cmd *cobra.Command, args []string) {
 		fmt.Println(err)
 		return
 	}
-	temps.RenderData.AuthApp = false
-	if appAuth == true {
-		temps.RenderData.AuthApp = true
-	}
+
 	// Generate models and migrations
 	if modelsType == "init" {
 		temps.ModelDataFrame()
@@ -94,9 +91,11 @@ func runModelsCommand(cmd *cobra.Command, args []string) {
 
 // handleAppDirectoryAndLoadConfig changes the working directory to the app's directory and loads the config data
 func handleAppDirectoryAndLoadConfig(appName string) error {
+	temps.InitProjectJSON()
 	currentDir, _ := os.Getwd()
 	newDir := filepath.Join(currentDir, appName)
 	if err := os.Chdir(newDir); err != nil {
+		fmt.Println("Errorr Changing directory")
 		return fmt.Errorf("error changing directory: %v", err)
 	}
 
@@ -123,7 +122,7 @@ func init() {
 	modelscli.Flags().StringVarP(&config_file, "config", "c", "config.json", "Specify the data file to load")
 	modelscli.Flags().StringP("type", "t", "", "Rerender the migration function by setting type to \"init\"")
 	modelscli.Flags().StringP("app", "a", "", "Set app name, e.g., \"blue-auth\"")
-	modelscli.Flags().BoolP("auth", "au", false, "Tell if generating models for auth app true or false")
+	modelscli.Flags().BoolP("auth", "p", false, "Tell if generating models for auth app true or false")
 
 	curdcli.Flags().StringVarP(&config_file, "config", "c", "config.json", "Specify the data file to load")
 	curdcli.Flags().StringP("frame", "f", "", "Specify the framework to use (echo or fiber)")

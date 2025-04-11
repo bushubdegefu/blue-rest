@@ -13,19 +13,17 @@ var (
 		Short: "Generate basic coverage test code for Fiber/Echo for the generated crud endpoints.",
 		Long:  `Generate basic coverage test code for Fiber/Echo for the generated crud endpoints.`,
 		Run: func(cmd *cobra.Command, args []string) {
-			// Load data from the config file
-			if err := temps.LoadData(config_file); err != nil {
-				fmt.Printf("Error loading data: %v\n", err)
-				return
-			}
 
 			frame, _ := cmd.Flags().GetString("frame")
-			if frame == "" {
-				fmt.Println("Error: --frame flag is required. Use --frame=echo or --frame=fiber.")
+			appName, _ := cmd.Flags().GetString("app")
+			if frame == "" || appName == "" {
+				fmt.Println("Error: --frame and --app flags are required. Use --frame=echo or --frame=fiber and --app=app_name.")
 				return
 			}
 
+			handleAppDirectoryAndLoadConfig(appName)
 			if frame == "echo" || frame == "fiber" {
+				temps.TestGenForApps(appName)
 				generateTests(frame)
 			} else {
 				fmt.Println("Error: Invalid frame value. Use --frame=echo or --frame=fiber.")
@@ -37,6 +35,7 @@ var (
 
 func generateTests(frame string) {
 	// Generate the test structure for Fiber
+
 	if frame == "fiber" {
 		temps.TestFrameFiber()
 	} else if frame == "echo" {
@@ -50,5 +49,6 @@ func generateTests(frame string) {
 func init() {
 	// // Register flags for the fiber command
 	testscli.Flags().StringP("frame", "f", "", "Specify the framework to use (echo or fiber) for the tests")
+	testscli.Flags().StringP("app", "a", "", "Specify the application name")
 	goFrame.AddCommand(testscli)
 }

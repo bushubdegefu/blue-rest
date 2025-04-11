@@ -76,6 +76,7 @@ func ModelDataFrame() {
 
 func MigrationInit() {
 
+	// ###################################################
 	err := os.MkdirAll("models", os.ModePerm)
 	if err != nil {
 		panic(err)
@@ -148,9 +149,9 @@ import (
 // {{.Name}} Database model info
 // @Description App type information
 type {{.Name}} struct {
-// The following fields will be ignored by Swagger
-   CreatedAt time.Time {{.BackTick}}json:"created_at,omitempty"{{.BackTick}}
-   UpdatedAt time.Time {{.BackTick}}json:"updated_at,omitempty"{{.BackTick}}
+	// The following fields will be ignored by Swagger
+   	CreatedAt time.Time {{.BackTick}}json:"created_at,omitempty"{{.BackTick}}
+    UpdatedAt time.Time {{.BackTick}}json:"updated_at,omitempty"{{.BackTick}}
     {{range .Fields}} {{.Name}} {{.Type}}  {{.BackTick}}{{.Annotation}}{{.BackTick}}
 {{end}}}
 
@@ -169,13 +170,13 @@ type {{.Name}} struct {
 {{- end }}
 
 {{- if not $hasUUID }}
-    func (entity *{{.Name}}) BeforeCreate(tx *gorm.DB) (err error) {
-    	{{- if $hasPassword }}
-   		entity.Password = HashFunc(entity.Password)
-    	{{- end }}
-        entity.CreatedAt = time.Now()
-        return
-    }
+func (entity *{{.Name}}) BeforeCreate(tx *gorm.DB) (err error) {
+   	{{- if $hasPassword }}
+  		entity.Password = HashFunc(entity.Password)
+   	{{- end }}
+    entity.CreatedAt = time.Now()
+    return
+}
 {{- end }}
 
 {{- $break_4 := false }}
@@ -294,20 +295,24 @@ func CleanDatabase(test_flag bool) {
 	if err == nil {
 		fmt.Println("Connection Opened to Database")
 		fmt.Println("Dropping Models if Exist")
-		database.Migrator().DropTable(
+		err := database.Migrator().DropTable(
 		{{- range .Models}}
 			&{{.Name}}{},
 		{{- end}}
 		)
+		if err != nil {
+			fmt.Println("Error dropping tables:", err)
+		}
 		fmt.Println("Database Cleaned")
 	} else {
 		panic(err)
 	}
 }
 
-{{if .AuthApp}}
+{{ if eq .AuthAppName .AppName }}
 func CreateSuperUser() {
-	db, err := database.ReturnSession("blue_auth")
+	configs.NewEnvFile("./configs")
+	db, err := database.ReturnSession("{{.AuthAppName | replaceString }}")
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
@@ -331,13 +336,13 @@ func CreateSuperUser() {
 	fmt.Println("Superuser created successfully")
 
 }
-{{-end}}
+{{- end}}
 
 func Populate(test_flag bool) {
 	if !test_flag {
 		configs.NewEnvFile("./configs")
 	}
-	db, err := database.ReturnSession("blue_auth")
+	db, err := database.ReturnSession("{{.AuthAppName | replaceString }}")
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
@@ -345,6 +350,8 @@ func Populate(test_flag bool) {
 		(&{{.Name}}{}).Populate(db)
 	{{- end}}
 }
+
+
 
 
 `
@@ -508,11 +515,16 @@ func ReturnSession(app_name string) (*gorm.DB,error) {
 		sqlDB.SetConnMaxLifetime(5 * time.Second)
 		DBSession = db
 	default:
-			return nil, fmt.Errorf("Database type not supported")
+			return nil, fmt.Errorf("database type not supported")
 
 	}
 
-	DBSession.Use(tracing.NewPlugin())
+	// Mouting Otel tracer plugin on gorm Session
+	err := DBSession.Use(tracing.NewPlugin())
+	if err != nil {
+		fmt.Printf("Error during connecting to otel plugin: %v\n", err)
+
+	}
 	return DBSession,nil
 
 }

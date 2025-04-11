@@ -121,8 +121,15 @@ func ScheduledTasks() *tasks.Scheduler {
 			if _, err := exec.Command("bash", "-c", Command2).Output(); err != nil {
 				fmt.Printf("error: %v\n", err)
 			}
-			gormLoggerfile.Truncate(0)
-			log_file.Truncate(0)
+
+			err := gormLoggerfile.Truncate(0)
+			if err != nil {
+				fmt.Println("Error truncating gorm logger file:", err)
+			}
+			lerr := log_file.Truncate(0)
+			if lerr != nil {
+				fmt.Println("Error truncating log file:", err)
+			}
 			return nil
 		},
 	}); err != nil {

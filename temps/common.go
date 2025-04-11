@@ -145,7 +145,7 @@ func Pagination(db *gorm.DB, queryModel interface{}, responseObjectModel interfa
 		close(str_chann)
 		close(count_channel)
 	}()
-	var offset int64 = int64(page-1) * int64(update_size)
+	offset := (page-1) * update_size
 	//finding count value
 	go func(comm <-chan int64) {
 		var local_counter int64
@@ -209,7 +209,7 @@ func PaginationPureModel(db *gorm.DB, queryModel interface{}, responseObjectMode
 		close(count_channel)
 	}()
 
-	var offset int64 = int64(page-1) * int64(size)
+	offset := (page-1) * size
 	//finding count value
 	go func(comm <-chan int64) {
 		var local_counter int64
@@ -270,7 +270,7 @@ func PaginationPureModelSearch(db *gorm.DB, queryModel interface{}, responseObje
 		close(count_channel)
 	}()
 
-	var offset int64 = int64(page-1) * int64(size)
+	offset := (page-1) * size
 
 	// Create a base query
 	query := db.Model(&queryModel)
@@ -360,7 +360,7 @@ func PaginationPureModelFilterOneToMany(db *gorm.DB, queryModel interface{}, res
 		close(count_channel)
 	}()
 
-	var offset int64 = int64(page-1) * int64(size)
+	offset := (page-1) * size
 	//finding count value
 	go func(comm <-chan int64) {
 		var local_counter int64

@@ -17,6 +17,7 @@ var (
 		Run: func(cmd *cobra.Command, args []string) {
 			moduleName, _ := cmd.Flags().GetString("name")
 			appName, _ := cmd.Flags().GetString("app")
+			authAppName, _ := cmd.Flags().GetString("auth")
 
 			if appName == "" && moduleName == "" {
 
@@ -25,7 +26,7 @@ var (
 			} else {
 				// Initialize the module
 				if moduleName != "" {
-					temps.CommonProjectName(moduleName)
+					temps.CommonProjectName(moduleName, authAppName)
 					temps.CommonModInit(moduleName)
 					// temps.CommonCMDInit()
 				}
@@ -41,7 +42,7 @@ var (
 
 				// Handle appName if provided
 				if appName != "" {
-					handleAppInitialization(appName, moduleName, currentDir)
+					handleAppInitialization(appName, moduleName, currentDir, authAppName)
 				}
 			}
 		},
@@ -53,6 +54,7 @@ var (
 		Run: func(cmd *cobra.Command, args []string) {
 			temps.InitProjectJSON()
 			temps.EnvGenForApps()
+			temps.EnvConfigReader()
 		},
 	}
 
@@ -82,9 +84,9 @@ var (
 	}
 )
 
-func handleAppInitialization(appName, moduleName, currentDir string) {
+func handleAppInitialization(appName, moduleName, currentDir, authAppName string) {
 
-	temps.ProjectSettings.AppendAppName(appName)
+	temps.ProjectSettings.AppendAppName(appName, authAppName)
 
 	// Create app directory and switch to it
 	os.Mkdir(appName, os.ModePerm)
@@ -174,6 +176,10 @@ func handleProjectType(projectType, frame string, cmd *cobra.Command) {
 		if appName != "" {
 			fmt.Println("migration type does not need app flag")
 		} else {
+			temps.InitProjectJSON()
+			temps.RenderData.AuthAppName = temps.ProjectSettings.AuthAppName
+			temps.RenderData.AppName = temps.ProjectSettings.AuthAppName
+			temps.RenderData.AppNames = temps.ProjectSettings.AppNames
 			temps.MigrationFrame()
 			temps.CommonCMD()
 		}
@@ -240,6 +246,7 @@ func init() {
 	// Register flags for all commands
 	initalizemodule.Flags().StringP("name", "n", "", "Specify the module name  (github.com/someuser/someproject)")
 	initalizemodule.Flags().StringP("app", "a", "", "Specify the application name  like auth-app,hrm-app")
+	initalizemodule.Flags().StringP("auth", "p", "", "Specify the authentication application name  defaults to django_auth")
 
 	// Register flags for the 'basic' command
 	basicCommand.Flags().StringP("type", "t", "", "Specify the type of folder structure to generate: rsa, db, producer,logs, consumer, tasks, pagination, otel,migration")

@@ -31,7 +31,6 @@ func CurdFrameFiber() {
 		if err != nil {
 			panic(err)
 		}
-
 		err = curd_tmpl.Execute(curd_file, model)
 		if err != nil {
 			fmt.Println(err)
@@ -61,7 +60,6 @@ import (
 
 	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v2"
-	"github.com/mitchellh/mapstructure"
 	"gorm.io/gorm"
 
 	"{{.ProjectName}}/common"
@@ -183,17 +181,14 @@ func Get{{.Name}}ByID(contx *fiber.Ctx) error {
 
 	// Preparing and querying database using Gorm
 	var {{.LowerName}}s_get models.{{.Name}}Get
-	var {{.LowerName}}s models.{{.Name}}
-	if res := db.WithContext(tracer.Tracer).Model(&models.{{.Name}}{}).Where("id = ?", id).First(&{{.LowerName}}s); res.Error != nil {
+
+	if res := db.WithContext(tracer.Tracer).Model(&models.{{.Name}}{}).Where("id = ?", id).Scan(&{{.LowerName}}s_get); res.Error != nil {
 		return contx.Status(http.StatusNotFound).JSON(common.ResponseHTTP{
 			Success: false,
 			Message: res.Error.Error(),
 			Data:    nil,
 		})
 	}
-
-	// filtering response data according to filtered defined struct
-	mapstructure.Decode({{.LowerName}}s, &{{.LowerName}}s_get)
 
 	//  Finally returing response if All the above compeleted successfully
 	return contx.Status(http.StatusOK).JSON(common.ResponseHTTP{

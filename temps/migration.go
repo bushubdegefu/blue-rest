@@ -47,7 +47,7 @@ import (
 )
 
 var (
-	{{.AppName}}migrate= &cobra.Command{
+	{{.AppName | replaceString }}migrate= &cobra.Command{
 		Use:   "migrate",
 		Short: "Run Database Migration for found in init migration Models",
 		Long:  "Migrate to init database",
@@ -62,22 +62,26 @@ var (
 		},
 	}
 
-	{{.AppName}}clean= &cobra.Command{
+	{{.AppName | replaceString }}clean= &cobra.Command{
 		Use:   "clean",
 		Short: "Drop Database Models for found in init migration Models",
 		Long:  "Drop Models found in the models definition",
 		Run: func(cmd *cobra.Command, args []string) {
 			clean_database()
 		},
+	}
 
+	{{ if eq .AuthAppName .AppName }}
 	createsuperuser = &cobra.Command{
 		Use:   "superuser",
 		Short: "Create super user",
 		Long:  "Create super user",
 		Run: func(cmd *cobra.Command, args []string) {
-			{{ .AppName }}.CreateSuperUser()
+			{{ .AuthAppName | replaceString }}.CreateSuperUser()
+			fmt.Println("Super user created successfully")
 		},
 	}
+	{{- end}}
 
 )
 
@@ -104,9 +108,10 @@ func clean_database() {
 }
 
 func init() {
-	{{.AppName}}migrate.Flags().StringP("type", "t", "", "Specify create to \"create\" the models to database, and \"populate\" to populate default permissions and content types")
-	goFrame.AddCommand({{.AppName}}migrate)
-	goFrame.AddCommand({{.AppName}}clean)
+	{{.AppName | replaceString }}migrate.Flags().StringP("type", "t", "", "Specify create to \"create\" the models to database, and \"populate\" to populate default permissions and content types")
+	goFrame.AddCommand({{.AppName | replaceString }}migrate)
+	goFrame.AddCommand({{.AppName | replaceString }}clean)
+	goFrame.AddCommand(createsuperuser)
 }
 
 `
