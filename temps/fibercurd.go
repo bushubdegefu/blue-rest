@@ -826,8 +826,8 @@ func Delete{{.FieldName}}{{.ParentName}}s(contx *fiber.Ctx) error {
 {{- end}}{{- end}}
 {{- range .Relations }}{{- if .OtM}}
 // Get {{.FieldName}}s of {{.ParentName}}
-// @Summary Get {{.ParentName}} to {{.FieldName}}
-// @Description Get {{.FieldName}} {{.ParentName}}
+// @Summary Get  {{.FieldName}}s of {{.ParentName}}
+// @Description Get {{.FieldName}}s of {{.ParentName}}
 // @Tags {{.FieldName}}{{.ParentName}}s
 // @Security ApiKeyAuth
 // @Accept json
@@ -835,10 +835,9 @@ func Delete{{.FieldName}}{{.ParentName}}s(contx *fiber.Ctx) error {
 // @Param page query int true "page"
 // @Param size query int true "page size"
 // @Success 200 {object} common.ResponsePagination{data=[]models.{{.FieldName}}Get}
-// @Param {{.LowerFieldName}}_id path int true "{{.FieldName}} ID"
 // @Param {{.LowerParentName}}_id path int true "{{.ParentName}} ID"
 // @Failure 400 {object} common.ResponseHTTP{}
-// @Router /{{.AppName | replaceString}}/{{.LowerFieldName}}{{.LowerParentName}}/{{ "{" }}{{.LowerFieldName}}_id{{ "}" }}/{{ "{" }}{{.LowerParentName}}_id{{ "}" }} [post]
+// @Router /{{$.AppName | replaceString}}/{{.LowerFieldName}}{{.LowerParentName}}/{{ "{" }}{{.LowerParentName}}_id{{ "}" }} [get]
 func Get{{.FieldName}}{{.ParentName}}s(contx *fiber.Ctx) error {
 
 	// Starting tracer context and tracer
@@ -873,7 +872,7 @@ func Get{{.FieldName}}{{.ParentName}}s(contx *fiber.Ctx) error {
 
 	// {{.LowerParentName}} to be added
 
-	_, result, err := common.PaginationPureModelFilterOneToMany(db, models.{{.FieldName}}{}, []models.{{.FieldName}}{}, "{{.LowerParentName}}_id = ?", uint({{.LowerParentName}}_id), uint(Page), uint(Limit), tracer.Tracer)
+	result,_, err := common.PaginationPureModelFilterOneToMany(db, models.{{.FieldName}}{}, []models.{{.FieldName}}{}, "{{.LowerParentName}}_id = ?", uint({{.LowerParentName}}_id), uint(Page), uint(Limit), tracer.Tracer)
 	if err != nil {
 			return contx.Status(http.StatusBadRequest).JSON(common.ResponseHTTP{
 				Success: false,
@@ -887,17 +886,121 @@ func Get{{.FieldName}}{{.ParentName}}s(contx *fiber.Ctx) error {
 	return contx.Status(http.StatusOK).JSON(result)
 }
 
-// Add {{.ParentName}} {{.FieldName}}
-// @Summary Add {{.ParentName}} to {{.FieldName}}
-// @Description Add {{.ParentName}} to {{.FieldName}}
-// @Tags {{.ParentName}}s
+// ###########
+// Get {{.FieldName}}s of {{.ParentName}} Complement
+// @Summary Get {{.ParentName}} to {{.FieldName}} Complement
+// @Description Get {{.FieldName}} {{.ParentName}} Complement
+// @Tags {{.FieldName}}{{.ParentName}}s
+// @Security ApiKeyAuth
+// @Accept json
+// @Produce json
+// @Success 200 {object} common.ResponseHTTP{data=[]models.{{.FieldName}}Get}
+// @Param {{.LowerParentName}}_id path int true "{{.ParentName}} ID"
+// @Failure 400 {object} common.ResponseHTTP{}
+// @Router /{{$.AppName | replaceString}}/{{.LowerFieldName}}complement{{.LowerParentName}}/{{ "{" }}{{.LowerParentName}}_id{{ "}" }} [get]
+func Get{{.FieldName}}Complement{{.ParentName}}s(contx *fiber.Ctx) error {
+	// Starting tracer context and tracer
+	ctx := contx.Locals("tracer")
+	tracer, _ := ctx.(*observe.RouteTracer)
+
+
+	//Connect to Database
+	db, _ := contx.Locals("db").(*gorm.DB)
+
+	var	{{.LowerFieldName}}s []models.{{.FieldName}}
+	filter_string := "{{.LowerParentName}}_id != ? or {{.LowerParentName}}_id is null "
+
+
+	// validate path params
+	{{.LowerParentName}}_id, err := strconv.Atoi(contx.Params("{{.LowerParentName}}_id"))
+	if err != nil {
+		return contx.Status(http.StatusBadRequest).JSON(common.ResponseHTTP{
+			Success: false,
+			Message: err.Error(),
+			Data:    nil,
+		})
+	}
+
+	//  actual result query
+	if err := db.WithContext(tracer.Tracer).Model(&models.{{.FieldName}}{}).Where(filter_string,{{.LowerParentName}}_id).Order("id ASC").Scan(&{{.LowerFieldName}}s).Error; err != nil {
+			return contx.Status(http.StatusBadRequest).JSON(common.ResponseHTTP{
+				Success: false,
+				Message: err.Error(),
+				Data:    nil,
+			})
+	}
+
+	// return value if transaction is sucessfull
+	return contx.Status(http.StatusOK).JSON(common.ResponseHTTP{
+		Success: true,
+		Data:   {{.LowerFieldName}}s,
+		Message: "working",
+	})
+}
+
+// Get {{.FieldName}}s of {{.ParentName}} Not Complement
+// @Summary Get {{.ParentName}} to {{.FieldName}} Not Complement
+// @Description Get {{.FieldName}} {{.ParentName}} Not Complement
+// @Tags {{.FieldName}}{{.ParentName}}s
+// @Security ApiKeyAuth
+// @Accept json
+// @Produce json
+// @Success 200 {object} common.ResponseHTTP{data=[]models.{{.FieldName}}Get}
+// @Param {{.LowerParentName}}_id path int true "{{.ParentName}} ID"
+// @Failure 400 {object} common.ResponseHTTP{}
+// @Router /{{$.AppName | replaceString}}/{{.LowerFieldName}}noncomplement{{.LowerParentName}}/{{ "{" }}{{.LowerParentName}}_id{{ "}" }} [get]
+func Get{{.FieldName}}NonComplement{{.ParentName}}s(contx *fiber.Ctx) error {
+	// Starting tracer context and tracer
+	ctx := contx.Locals("tracer")
+	tracer, _ := ctx.(*observe.RouteTracer)
+
+
+	//Connect to Database
+	db, _ := contx.Locals("db").(*gorm.DB)
+
+	var	{{.LowerFieldName}}s []models.{{.FieldName}}
+	filter_string := "{{.LowerParentName}}_id = ?"
+
+
+	// validate path params
+	{{.LowerParentName}}_id, err := strconv.Atoi(contx.Params("{{.LowerParentName}}_id"))
+	if err != nil {
+		return contx.Status(http.StatusBadRequest).JSON(common.ResponseHTTP{
+			Success: false,
+			Message: err.Error(),
+			Data:    nil,
+		})
+	}
+
+	//  actual result query
+	if err := db.WithContext(tracer.Tracer).Model(&models.{{.FieldName}}{}).Where(filter_string,{{.LowerParentName}}_id).Order("id ASC").Scan(&{{.LowerFieldName}}s).Error; err != nil {
+			return contx.Status(http.StatusBadRequest).JSON(common.ResponseHTTP{
+				Success: false,
+				Message: err.Error(),
+				Data:    nil,
+			})
+	}
+
+	// return value if transaction is sucessfull
+	return contx.Status(http.StatusOK).JSON(common.ResponseHTTP{
+		Success: true,
+		Data:   {{.LowerFieldName}}s,
+		Message: "working",
+	})
+}
+//############
+
+// Add {{.FieldName}} to {{.ParentName}}
+// @Summary Add {{.FieldName}} to {{.ParentName}}
+// @Description Add {{.FieldName}} to {{.ParentName}}
+// @Tags {{.FieldName}}{{.ParentName}}s
 // @Security ApiKeyAuth
 // @Accept json
 // @Produce json
 // @Param {{.LowerFieldName}}_id path int true "{{.FieldName}} ID"
-// @Param {{.LowerParentName}}_id query int true " {{.ParentName}} ID"
+// @Param {{.LowerParentName}}_id path int true "{{.ParentName}} ID"
 // @Failure 400 {object} common.ResponseHTTP{}
-// @Router /{{.AppName | replaceString}}/{{.LowerFieldName}}{{.LowerParentName}}/{{ "{" }}{{.LowerFieldName}}_id{{ "}" }} [patch]
+// @Router /{{$.AppName | replaceString}}/{{.LowerFieldName}}{{.LowerParentName}}/{{ "{" }}{{.LowerFieldName}}_id{{ "}" }}/{{ "{" }}{{.LowerParentName}}_id{{ "}" }} [post]
 func Add{{.FieldName}}{{.ParentName}}s(contx *fiber.Ctx) error {
 
 	// Starting tracer context and tracer
@@ -927,8 +1030,16 @@ func Add{{.FieldName}}{{.ParentName}}s(contx *fiber.Ctx) error {
 		})
 	}
 
-	// fetching {{.LowerFieldName}} to be added
-	{{.LowerParentName}}_id, _ := strconv.Atoi(contx.Query("{{.LowerParentName}}_id"))
+	// query path parm value of {{.LowerParentName}} to be added
+	{{.LowerParentName}}_id, err := strconv.Atoi(contx.Params("{{.LowerParentName}}_id"))
+	if err != nil {
+		return contx.Status(http.StatusBadRequest).JSON(common.ResponseHTTP{
+			Success: false,
+			Message: err.Error(),
+			Data:    nil,
+		})
+	}
+
 	var {{.LowerParentName}} models.{{.ParentName}}
 	if res := db.WithContext(tracer.Tracer).Model(&models.{{.ParentName}}{}).Where("id = ?", {{.LowerParentName}}_id).First(&{{.LowerParentName}}); res.Error != nil {
 		return contx.Status(http.StatusServiceUnavailable).JSON(common.ResponseHTTP{
@@ -937,8 +1048,6 @@ func Add{{.FieldName}}{{.ParentName}}s(contx *fiber.Ctx) error {
 			Data:    nil,
 		})
 	}
-
-	// startng update transaction
 
 	tx := db.WithContext(tracer.Tracer).Begin()
 	//  Adding one to many Relation
@@ -963,14 +1072,14 @@ func Add{{.FieldName}}{{.ParentName}}s(contx *fiber.Ctx) error {
 // Delete {{.ParentName}} {{.FieldName}}
 // @Summary Delete {{.ParentName}} {{.FieldName}}
 // @Description Delete {{.ParentName}} {{.FieldName}}
-// @Tags {{.ParentName}}s
+// @Tags {{.FieldName}}{{.ParentName}}s
 // @Security ApiKeyAuth
 // @Accept json
 // @Produce json
-// @Param {{.LowerFieldName}}_id path int true "{{.ParentName}} ID"
-// @Param {{.LowerParentName}}_id query int true "{{.FieldName}} ID"
+// @Param {{.LowerFieldName}}_id path int true "{{.FieldName}} ID"
+// @Param {{.LowerParentName}}_id path int true "{{.ParentName}} ID"
 // @Failure 400 {object} common.ResponseHTTP{}
-// @Router /{{.AppName | replaceString}}/{{.LowerFieldName}}{{.LowerParentName}}/{{ "{" }}{{.LowerFieldName}}_id{{ "}" }} [delete]
+// @Router /{{$.AppName | replaceString}}/{{.LowerFieldName}}{{.LowerParentName}}/{{ "{" }}{{.LowerFieldName}}_id{{ "}" }}/{{ "{" }}{{.LowerParentName}}_id{{ "}" }} [delete]
 func Delete{{.FieldName}}{{.ParentName}}s(contx *fiber.Ctx) error {
 
 	// Starting tracer context and tracer
@@ -1003,7 +1112,15 @@ func Delete{{.FieldName}}{{.ParentName}}s(contx *fiber.Ctx) error {
 
 	// fetching {{.LowerParentName}} to be added
 	var {{.LowerParentName}} models.{{.ParentName}}
-	{{.LowerParentName}}_id, _ := strconv.Atoi(contx.Query("{{.LowerParentName}}_id"))
+	{{.LowerParentName}}_id, err := strconv.Atoi(contx.Params("{{.LowerParentName}}_id"))
+	if err != nil {
+		return contx.Status(http.StatusBadRequest).JSON(common.ResponseHTTP{
+			Success: false,
+			Message: err.Error(),
+			Data:    nil,
+		})
+	}
+
 	if res := db.WithContext(tracer.Tracer).Model(&models.{{.ParentName}}{}).Where("id = ?", {{.LowerParentName}}_id).First(&{{.LowerParentName}}); res.Error != nil {
 		return contx.Status(http.StatusServiceUnavailable).JSON(common.ResponseHTTP{
 			Success: false,

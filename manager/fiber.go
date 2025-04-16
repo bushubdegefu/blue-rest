@@ -26,12 +26,14 @@ var (
 					return
 				}
 				temps.FiberFrameSetupAndMiddleware(appName)
-				temps.AuthUtilsFrame(appName)
-				temps.AuthLoginFrame(appName, "fiber")
+				if appName == temps.ProjectSettings.AuthAppName {
+					temps.AuthUtilsFrame(appName)
+					temps.AuthLoginFrame(appName, "fiber")
+				}
 
 			} else if globalName {
 				temps.FiberAppAndMiddleware()
-				generateFiberFiles()
+				runSwagInitForApps()
 			} else {
 				fmt.Println("No app name specified")
 			}
@@ -40,12 +42,29 @@ var (
 	}
 )
 
-func generateFiberFiles() {
-	// running go mod tidy finally
-	if err := exec.Command("swag", "init").Run(); err != nil {
-		fmt.Printf("error generating swagger: %v \n", err)
+func runSwagInitForApps() {
+	for _, appName := range temps.ProjectSettings.AppNames {
+		// Construct paths for generalInfo, output, and dir
+		// generalInfo := filepath.Join(appName, "setup.go")
+		// outputDir := filepath.Join(appName, "docs")
+		dirArg := fmt.Sprintf("%s,common", appName)
+		outputDir := fmt.Sprintf("%s/docs", appName)
+
+		// Prepare the swag init command
+		cmd := exec.Command(
+			"swag", "init",
+			"--generalInfo", "setup.go",
+			"--output", outputDir,
+			"--dir", dirArg,
+		)
+
+		// Run the command and handle errors
+		if err := cmd.Run(); err != nil {
+			fmt.Printf("Error generating swagger for app '%s': %v\n", appName, err)
+		} else {
+			fmt.Printf("Swagger generated for app '%s'\n", appName)
+		}
 	}
-	// Common command structure
 }
 
 func init() {

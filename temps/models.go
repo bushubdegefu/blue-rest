@@ -133,17 +133,41 @@ package models
 
 import (
 	"time"
-	"fmt"
 	"gorm.io/gorm"
 	{{- $break_3 := false }}
-	{{- range .Fields}}
-	{{- if eq .Name "UUID" }}
+	{{- range .Fields }}
+		{{- if eq .Name "UUID" }}
+			{{- $break_3 = true }}
+		{{- end }}
+	{{- end }}
+
+	{{- if $break_3 }}
 	"github.com/google/uuid"
-	{{- $break_3 = true }}
-	{{- end}}
-	{{- end}}
+	{{- end }}
+
+
+	{{ if and (not (eq .AuthAppName .AppName)) (eq .AuthAppType "standalone") }}
+	{{ .AuthAppName | replaceString }}_models "{{ .ProjectName }}/{{ .AuthAppName }}/models"
+	{{- end }}
+
+	{{- $break_7 := false }}
+	{{- range .Fields }}
+	{{- if eq .Type "sql.NullInt64" }}
+	{{- $break_7 = true }}
+	{{- end }}
+	{{- end }}
+
+	{{- if or (eq $break_7 true) (eq .AuthAppType "standalone") }}
 	"database/sql"
+	{{- end }}
+
+	{{- if eq .AuthAppType "standalone" }}
+	"fmt"
 	"log"
+	{{- end }}
+
+
+
 )
 
 // {{.Name}} Database model info
@@ -201,9 +225,10 @@ func (entity *{{.Name}}) BeforeUpdate(tx *gorm.DB) (err error) {
 	return
 }
 
+{{- if eq .AuthAppType "standalone" }}
 func (entity *{{.Name}}) Populate(tx *gorm.DB) {
 	// Create ContentType for User model
-	contentType := ContentType{
+	contentType := {{ if not (eq .AuthAppName .AppName) }}{{ .AuthAppName | replaceString }}_models.{{- end}}ContentType{
 		AppLabel: "{{ .AppName | replaceString }}",
 		Model:    "{{.LowerName}}",
 	}
@@ -212,7 +237,7 @@ func (entity *{{.Name}}) Populate(tx *gorm.DB) {
 	}
 
 	// Create Permissions for User model
-	permissions := []Permission{
+	permissions := []{{ if not (eq .AuthAppName .AppName) }}{{ .AuthAppName | replaceString }}_models.{{- end}}Permission{
 		{ContentTypeID: sql.NullInt64{Int64: int64(contentType.ID), Valid: true}, Codename: "{{ .AppName | replaceString }}_can_add_{{.LowerName}}"},
 		{ContentTypeID: sql.NullInt64{Int64: int64(contentType.ID), Valid: true}, Codename: "{{ .AppName | replaceString }}_can_view_{{.LowerName}}"},
 		{ContentTypeID: sql.NullInt64{Int64: int64(contentType.ID), Valid: true}, Codename: "{{ .AppName | replaceString }}_can_change_{{.LowerName}}"},
@@ -227,6 +252,7 @@ func (entity *{{.Name}}) Populate(tx *gorm.DB) {
 
 	fmt.Println("Populated ContentType and Permissions for {{.Name}} request actions successfully")
 }
+{{- end }}
 
 // {{.Name}}Post model info
 // @Description {{.Name}}Post type information
@@ -310,6 +336,7 @@ func CleanDatabase(test_flag bool) {
 }
 
 {{ if eq .AuthAppName .AppName }}
+{{- if eq .AuthAppType "standalone" }}
 func CreateSuperUser() {
 	configs.NewEnvFile("./configs")
 	db, err := database.ReturnSession("{{.AuthAppName | replaceString }}")
@@ -336,8 +363,37 @@ func CreateSuperUser() {
 	fmt.Println("Superuser created successfully")
 
 }
-{{- end}}
+{{- else if eq .AuthAppType "sso" }}
+func CreateSuperUser() {
+	configs.NewEnvFile("./configs")
+	db, err := database.ReturnSession("{{.AuthAppName | replaceString }}")
+	if err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
+	}
+	// Create the superuser
+	user := &User{
+		Username:    "superuser",
+		Email:       "superuser@mail.com",
+		Password:    "default@123",
+		FirstName:  "Super",
+		MiddleName: "User",
+		Disabled:   false,
+		LastName:    "Admin",
+	}
 
+	// Insert the user into the database
+	if err := db.Create(user).Error; err != nil {
+		fmt.Printf("failed to create superuser: %v\n", err)
+	}
+	db.Commit()
+	fmt.Println("Superuser created successfully")
+}
+{{- else }}
+// No auth app
+{{- end}}
+{{- end }}
+
+{{- if eq .AuthAppType "standalone" }}
 func Populate(test_flag bool) {
 	if !test_flag {
 		configs.NewEnvFile("./configs")
@@ -350,7 +406,48 @@ func Populate(test_flag bool) {
 		(&{{.Name}}{}).Populate(db)
 	{{- end}}
 }
+{{- end }}
 
+
+func CreateStatsDatabase() {
+	configs.NewEnvFile("./configs")
+	db, err := database.ReturnSession("{{.AppName | replaceString }}")
+	if err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
+	}
+
+	// Get the underlying *sql.DB
+	sqlDB, err := db.DB()
+	if err != nil {
+		log.Fatalf("Failed to get raw DB instance: %v", err)
+	}
+
+	dropView := {{.BackTick}}DROP VIEW IF EXISTS {{.AuthAppName | replaceString }}_stats;{{.BackTick}}
+	_, err = sqlDB.Exec(dropView)
+	if err != nil {
+		log.Fatalf("Failed to drop existing view: %v", err)
+	}
+
+	rawSQLString := {{.BackTick}}
+	CREATE VIEW "{{.AppName | replaceString }}_stats"  AS
+	SELECT
+	{{- $total := len .Models }}
+	{{- range $index, $model := .Models }}
+		(SELECT COUNT(*) FROM "{{$model.Name | camelToSnake }}s") AS total_{{$model.Name | camelToSnake }}s{{if ne (add $index 1) $total}},{{else}}{{end}}
+	{{- end}}
+	;
+	{{.BackTick}}
+
+	// Execute the raw SQL
+	_, err = sqlDB.Exec(rawSQLString)
+	if err != nil {
+		log.Fatalf("Failed to create view: %v", err)
+	} else {
+		log.Println("Successfully created view: blue_auth_stats")
+	}
+
+	log.Println("{{.AppName | replaceString }}_stats view created successfully")
+}
 
 
 

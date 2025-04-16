@@ -18,6 +18,7 @@ var (
 			moduleName, _ := cmd.Flags().GetString("name")
 			appName, _ := cmd.Flags().GetString("app")
 			authAppName, _ := cmd.Flags().GetString("auth")
+			authAppType, _ := cmd.Flags().GetString("type")
 
 			if appName == "" && moduleName == "" {
 
@@ -26,7 +27,7 @@ var (
 			} else {
 				// Initialize the module
 				if moduleName != "" {
-					temps.CommonProjectName(moduleName, authAppName)
+					temps.CommonProjectName(moduleName, authAppName, authAppType)
 					temps.CommonModInit(moduleName)
 					// temps.CommonCMDInit()
 				}
@@ -247,6 +248,7 @@ func init() {
 	initalizemodule.Flags().StringP("name", "n", "", "Specify the module name  (github.com/someuser/someproject)")
 	initalizemodule.Flags().StringP("app", "a", "", "Specify the application name  like auth-app,hrm-app")
 	initalizemodule.Flags().StringP("auth", "p", "", "Specify the authentication application name  defaults to django_auth")
+	initalizemodule.Flags().StringP("type", "t", "", "specify if you are using standalone authentication like django admin or sso like solution")
 
 	// Register flags for the 'basic' command
 	basicCommand.Flags().StringP("type", "t", "", "Specify the type of folder structure to generate: rsa, db, producer,logs, consumer, tasks, pagination, otel,migration")

@@ -511,10 +511,11 @@ func Login(contx echo.Context) error {
 		})
 	}
 }
+
 // ###############################################################################
-// stats endpoint about schemas
+// {{.CurrentAppName }} stats endpoint about schemas
 // ###############################################################################
-type DBStats struct {
+type {{.CurrentAppName  | replaceStringCapitalize }}DBStats struct {
 	TotalUsers            int    {{.BackTick}}json:"total_users"{{.BackTick}}
 	TotalGroups           int    {{.BackTick}}json:"total_groups"{{.BackTick}}
 	TotalPermissions      int    {{.BackTick}}json:"total_permissions"{{.BackTick}}
@@ -540,7 +541,7 @@ type DBStats struct {
 // @Tags Authentication
 // @Accept json
 // @Produce json
-// @Success 200 {object} common.ResponseHTTP{data=DBStats{}}
+// @Success 200 {object} common.ResponseHTTP{data={{.CurrentAppName  | replaceStringCapitalize  }}DBStats{}}
 // @Failure 404 {object} common.ResponseHTTP{}
 // @Failure 503 {object} common.ResponseHTTP{}
 // @Router /{{.CurrentAppName | replaceString}}/stats [get]
@@ -552,8 +553,8 @@ func DbStatEndpoint(contx echo.Context) error {
 	db := contx.Get("db").(*gorm.DB)
 
 	// Getting Stats
-	var stats DBStats
-	res := db.WithContext(tracer.Tracer).Raw("SELECT * FROM db_stats").Scan(&stats)
+	var stats {{.CurrentAppName  | replaceStringCapitalize  }}DBStats
+	res := db.WithContext(tracer.Tracer).Raw("SELECT * FROM {{.CurrentAppName | replaceString}}_stats").Scan(&stats)
 	if res.Error != nil {
 
 		return contx.JSON(http.StatusServiceUnavailable, common.ResponseHTTP{
@@ -615,7 +616,7 @@ type TokenResponse struct {
 // @Success 200 {object} common.ResponseHTTP{data=TokenResponse{}}
 // @Failure 404 {object} common.ResponseHTTP{}
 // @Failure 503 {object} common.ResponseHTTP{}
-// @Router /blue_auth/login [post]
+// @Router /{{.CurrentAppName  | respectString }}/login [post]
 func Login(contx *fiber.Ctx) error {
 	//  Getting tracer context
 	ctx := contx.Locals("tracer")
@@ -778,9 +779,9 @@ func Login(contx *fiber.Ctx) error {
 }
 
 // ###############################################################################
-// stats endpoint about schemas
+// {{.CurrentAppName  | replaceStringCapitalize  }} endpoint about schemas
 // ###############################################################################
-type DBStats struct {
+type {{.CurrentAppName  | replaceStringCapitalize  }}DBStats struct {
 	TotalUsers            int    {{.BackTick}}json:"total_users"{{.BackTick}}
 	TotalGroups           int    {{.BackTick}}json:"total_groups"{{.BackTick}}
 	TotalPermissions      int    {{.BackTick}}json:"total_permissions"{{.BackTick}}
@@ -806,10 +807,10 @@ type DBStats struct {
 // @Tags Authentication
 // @Accept json
 // @Produce json
-// @Success 200 {object} common.ResponseHTTP{data=DBStats{}}
+// @Success 200 {object} common.ResponseHTTP{data={{.CurrentAppName  | replaceStringCapitalize  }}DBStats{}}
 // @Failure 404 {object} common.ResponseHTTP{}
 // @Failure 503 {object} common.ResponseHTTP{}
-// @Router /blue_auth/stats [get]
+// @Router /{{.CurrentAppName | replaceString }}/stats [get]
 func DbStatEndpoint(contx *fiber.Ctx) error {
 	//  Getting tracer context
 	ctx := contx.Locals("tracer")
@@ -819,8 +820,8 @@ func DbStatEndpoint(contx *fiber.Ctx) error {
 	db, _ := contx.Locals("db").(*gorm.DB)
 
 	// Getting Stats
-	var stats DBStats
-	res := db.WithContext(tracer.Tracer).Raw("SELECT * FROM db_stats").Scan(&stats)
+	var stats {{.CurrentAppName  | replaceStringCapitalize  }}DBStats
+	res := db.WithContext(tracer.Tracer).Raw("SELECT * FROM {{.CurrentAppName | replaceString }}_stats").Scan(&stats)
 	if res.Error != nil {
 
 		return contx.Status(http.StatusServiceUnavailable).JSON(common.ResponseHTTP{

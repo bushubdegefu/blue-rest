@@ -2,7 +2,6 @@ package manager
 
 import (
 	"fmt"
-	"os/exec"
 
 	"github.com/bushubdegefu/blue-rest/temps"
 	"github.com/spf13/cobra"
@@ -26,12 +25,14 @@ var (
 					return
 				}
 				temps.EchoFrameSetupAndMiddleware(appName)
-				temps.AuthUtilsFrame(appName)
-				temps.AuthLoginFrame(appName, "echo")
+				if appName == temps.ProjectSettings.AuthAppName {
+					temps.AuthLoginFrame(appName, "echo")
+					temps.AuthUtilsFrame(appName)
+				}
 
 			} else if globalName {
 				temps.EchoAppAndMiddleware()
-				echogen()
+				runSwagInitForApps()
 			} else {
 				fmt.Println("No app name specified")
 			}
@@ -39,13 +40,6 @@ var (
 		},
 	}
 )
-
-func echogen() {
-	// running go mod tidy finally
-	if err := exec.Command("swag", "init").Run(); err != nil {
-		fmt.Printf("error generating swagger: %v \n", err)
-	}
-}
 
 func init() {
 	echocli.Flags().StringP("app", "a", "", "Specify the app name, so that echo app will be generated")

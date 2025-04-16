@@ -56,6 +56,8 @@ var (
 			migrateType, _ := cmd.Flags().GetString("type")
 			if migrateType == "create" {
 				init_migrate()
+			} else if migrateType == "stats" {
+				create_views()
 			} else {
 				populate_migrate()
 			}
@@ -94,10 +96,19 @@ func init_migrate() {
 }
 
 func populate_migrate() {
+{{- if eq .AuthAppType "standalone" }}
     {{- range .AppNames}}
 	{{ . | replaceString }}.Populate(false)
 	{{- end}}
+{{- end}}
 	fmt.Println("Auth Populated Sucessfuly Database Models sucessfully")
+}
+
+func create_views() {
+	{{- range .AppNames}}
+	{{ . | replaceString }}.CreateStatsDatabase()
+	{{- end}}
+	fmt.Println("Auth Created App stat views")
 }
 
 func clean_database() {

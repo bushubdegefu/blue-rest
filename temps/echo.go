@@ -130,39 +130,27 @@ func dbsessioninjection(next echo.HandlerFunc) echo.HandlerFunc {
 	}
 }
 
-func NextAuthValidator(key string, ctx echo.Context) (bool, error) {
-	if ctx.Path() == "/api/v1/blue_auth/login" || ctx.Path() == "/api/v1/blue_auth/stats" {
-		return true, nil
-	}
-
-
-//  You have to fix the NextAuthValidator function, it will let all values pass
-	// using required role access logic
-	return true, nil
-}
-
-
-// AddAppTokenIfMissing is a middleware that checks if the x-app-token header is present in the request. so that the login route can work
-func AddAppTokenIfMissing(next echo.HandlerFunc) echo.HandlerFunc {
-	return func(contx echo.Context) error {
-		// Check if x-app-token header exists
-		appToken := contx.Request().Header.Get("x-app-token")
-
-		// If the x-app-token header is missing, set a default value
-		if appToken == "" {
-			contx.Request().Header.Set("x-app-token", "login")
-		}
-
-		// Continue processing the request
-		return next(contx)
-	}
-}
 // Custom Middlewares can be added here specfic to the app
 
 `
 
 var setupFileTemplate = `
 package {{.PackageAppName}}
+//	@title			Swagger {{.AppName }} API
+//	@version		0.1
+//	@description	This is {{.AppName }} API OPENAPI Documentation.
+//	@termsOfService	http://swagger.io/terms/
+//  @BasePath  /api/v1
+
+//	@securityDefinitions.apikey	ApiKeyAuth
+//	@in							header
+//	@name						X-APP-TOKEN
+//	@description				Description for what is this security definition being used
+
+//	@securityDefinitions.apikey Refresh
+//	@in							header
+//	@name						X-REFRESH-TOKEN
+//	@description				Description for what is this security definition being used
 
 import (
 	"{{.ProjectName}}/{{.AppName}}/controllers"
@@ -176,12 +164,6 @@ import (
 func SetupRoutes(app *echo.Echo) {
 	logOutput, _ := logs.Logfile("{{ .AppName | replaceString }}")
 
-	// the Otel spanner middleware
-	app.Use(otelechospanstarter)
-
-	// db session injection
-	app.Use(dbsessioninjection)
-
 	app.Use(middleware.LoggerWithConfig(middleware.LoggerConfig{
 		Format: {{.BackTick}}{"time":"${time_rfc3339_nano}","id":"${id}","remote_ip":"${remote_ip}",{{.BackTick}} +
 			{{.BackTick}}"host":"${host}","method":"${method}","uri":"${uri}","user_agent":"${user_agent}",{{.BackTick}} +
@@ -193,8 +175,16 @@ func SetupRoutes(app *echo.Echo) {
 	// then authentication middlware
 	gapp := app.Group("/api/v1/{{.AppName | replaceString}}")
 
+	// the Otel spanner middleware
+	gapp.Use(otelechospanstarter)
+
+	// db session injection
+	gapp.Use(dbsessioninjection)
+
+	{{ if eq .AuthAppName .AppName }}
 	gapp.POST("/login", controllers.Login).Name = "login"
 	gapp.GET("/stats", controllers.DbStatEndpoint).Name = "db_stat"
+	{{- end}}
 	{{- range .Models}}
 	gapp.GET("/{{.LowerName}}", controllers.Get{{.Name}}s).Name = "{{.AppName | replaceString}}_can_view_{{.LowerName}}"
 	gapp.GET("/{{.LowerName}}/:{{.LowerName}}_id", controllers.Get{{.Name}}ByID).Name = "{{.AppName | replaceString}}_can_view_{{.LowerName}}"
@@ -235,14 +225,12 @@ import (
 	"github.com/madflojo/tasks"
 	"github.com/spf13/cobra"
 	"golang.org/x/time/rate"
-
-	echoSwagger "github.com/swaggo/echo-swagger"
+	echoSwagger "github.com/bushubdegefu/echo-swagger"
 
 	{{- range .AppNames}}
 	{{ . | replaceString }}_tasks "{{$.ProjectName}}/{{ . }}/bluetasks"
 	{{- end }}
 
-	_ "{{.ProjectName}}/docs"
 	"{{.ProjectName}}/observe"
 )
 
@@ -305,7 +293,6 @@ func echo_run(env string) {
 	// Mounting Global Middleware
 	MountGlobalMiddleware(app)
 
-	app.GET("/docs/*", echoSwagger.WrapHandler)
 
 	// Serve static files from the "dist/django_admin_ui" folder
 	app.Static("/", "./dist/django_admin_ui")
@@ -315,6 +302,18 @@ func echo_run(env string) {
 		return c.File("./dist/django_admin_ui/index.html")
 	}).Name = "Admin_UI"
 
+	// OpenAPI documentation
+	{{- range .AppNames}}
+	//  {{ . }} Swagger Docs
+	app.GET("/{{ . | replaceString }}/docs/doc.json", func(contx echo.Context) error {
+			return contx.File("{{ . }}/docs/swagger.json")
+		}).Name = "{{ . | replaceString}}_docs_json"
+
+	app.GET("/{{ . | replaceString}}/docs/*", echoSwagger.New(echoSwagger.Config{
+		InstanceName: "{{ . | replaceString}}",
+		URL:          "/{{ . | replaceString }}/docs/doc.json", // Match the served JSON file
+	})).Name = "{{ . | replaceString}}_docs"
+	{{- end }}
 
 	// Setting up Endpoints
 	{{- range .AppNames}}

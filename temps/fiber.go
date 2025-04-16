@@ -140,6 +140,22 @@ func dbsessioninjection(ctx *fiber.Ctx) error {
 var setupFileTemplateFiber = `
 package {{.PackageAppName}}
 
+//	@title			Swagger {{.AppName }} API
+//	@version		0.1
+//	@description	This is {{.AppName }} API OPENAPI Documentation.
+//	@termsOfService	http://swagger.io/terms/
+//  @BasePath  /api/v1
+
+//	@securityDefinitions.apikey	ApiKeyAuth
+//	@in							header
+//	@name						X-APP-TOKEN
+//	@description				Description for what is this security definition being used
+
+//	@securityDefinitions.apikey Refresh
+//	@in							header
+//	@name						X-REFRESH-TOKEN
+//	@description				Description for what is this security definition being used
+
 import (
 	"fmt"
 
@@ -165,18 +181,19 @@ func SetupRoutes(app *fiber.App) {
 		Output:     log_file,
 	}))
 
-	//app logging open telemetery
-	app.Use(otelspanstarter)
-
-	// database session injection to local context
-	app.Use(dbsessioninjection)
-
-
 	// If test mode is enabled, skip the keyauth middleware and allow all requests
 	gapp := app.Group("/api/v1/{{.AppName | replaceString}}")
 
+	//app logging open telemetery
+	gapp.Use(otelspanstarter)
+
+	// database session injection to local context
+	gapp.Use(dbsessioninjection)
+
+	{{ if eq .AuthAppName .AppName }}
 	gapp.Post("/login", controllers.Login).Name("login")
 	gapp.Get("/stats", controllers.DbStatEndpoint).Name("db_stat")
+	{{- end}}
 	{{- range .Models}}
 	gapp.Get("/{{.LowerName}}", controllers.Get{{.Name}}s).Name("{{.AppName | replaceString}}_can_view_{{.LowerName}}")
 	gapp.Get("/{{.LowerName}}/:{{.LowerName}}_id", controllers.Get{{.Name}}ByID).Name("{{.AppName | replaceString}}_can_view_{{.LowerName}}")
@@ -215,9 +232,9 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/gofiber/fiber/v2/middleware/monitor"
 	"github.com/gofiber/fiber/v2/middleware/recover"
-	"github.com/gofiber/swagger"
 	"github.com/madflojo/tasks"
 	"github.com/spf13/cobra"
+	"github.com/gofiber/swagger"
 	{{- range .AppNames}}
 	{{ . | replaceString }} "{{$.ProjectName}}/{{ . }}"
 	{{- end }}
@@ -226,7 +243,7 @@ import (
 	{{ . | replaceString }}_tasks "{{$.ProjectName}}/{{ . }}/bluetasks"
 	{{- end }}
 	"{{.ProjectName}}/observe"
-	_ "{{.ProjectName}}/docs"
+
 
 
 )
@@ -324,6 +341,17 @@ func fiber_run(env string) {
 	// Mounting Global Middleware
 	MountGlobalMiddleware(app)
 
+	// Open API Documentation
+	{{- range .AppNames}}
+	//  {{ . }} Swagger Docs
+	app.Static("/{{ . | replaceString}}/docs/doc.json", "./{{ . }}/docs/swagger.json")
+	// Serve {{ . | replaceString }} docs
+	app.Get("/{{ . | replaceString }}/docs/*", swagger.New(swagger.Config{
+		InstanceName: "{{ . | replaceString }}",
+		URL:          "/{{ . | replaceString }}/docs/doc.json", // Match the served JSON file
+	}))
+	{{- end }}
+
 	app.Static("/", "./dist/django_admin_ui")
 
 	app.Get("/admin/*", func(ctx *fiber.Ctx) error {
@@ -333,9 +361,7 @@ func fiber_run(env string) {
 	app.Get("/", func(c *fiber.Ctx) error {
 		return c.SendString("Hello, World!")
 	})
-	// swagger docs
-	app.Get("/docs/*", swagger.HandlerDefault)
-	app.Get("/docs/*", swagger.New()).Name("swagger_routes")
+
 
 	// fiber native monitoring metrics endpoint
 	app.Get("/lmetrics", monitor.New(monitor.Config{Title: "goBlue Metrics Page"})).Name("custom_metrics_route")

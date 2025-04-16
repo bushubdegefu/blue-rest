@@ -2,6 +2,7 @@ package temps
 
 import (
 	"math/rand"
+	"regexp"
 	"strings"
 	"text/template"
 
@@ -111,7 +112,22 @@ func randomBool() bool {
 	return rand.Intn(2) == 1
 }
 
+// CamelToSnake converts CamelCase or PascalCase to snake_case
+func CamelToSnake(s string) string {
+	// Insert underscore before all caps that are followed by lowercase letters
+	re := regexp.MustCompile("([a-z0-9])([A-Z])")
+	snake := re.ReplaceAllString(s, "${1}_${2}")
+
+	// Handle acronym-style capitals (e.g., "JSONData" -> "json_data")
+	re = regexp.MustCompile("([A-Z]+)([A-Z][a-z])")
+	snake = re.ReplaceAllString(snake, "${1}_${2}")
+
+	return strings.ToLower(snake)
+}
+
 var FuncMap = template.FuncMap{
+	"camelToSnake":            CamelToSnake,            // Register CamelToSnake function
+	"add":                     add,                     // Register Add function
 	"parseTime":               parseTime,               // Register custom function
 	"parseInt":                parseInt,                // Register custom function
 	"randomEmail":             randomEmail,             // Register random email function
@@ -128,4 +144,8 @@ var FuncMap = template.FuncMap{
 	"replaceString":           replaceString,           // Register hyphen with underscore
 	"replaceStringCapitalize": replaceStringCapitalize, // Register hyphen with underscore
 	"formatSliceToString":     formatSliceToString,     // Register format slice to string function
+}
+
+func add(a int, b int) int {
+	return a + b
 }

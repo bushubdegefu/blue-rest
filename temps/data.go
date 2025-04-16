@@ -38,6 +38,7 @@ type Data struct {
 	Models         []Model  `json:"models"`
 	AppNames       []string `json:"app_names"`
 	AuthAppName    string   `json:"auth_app_name"`
+	AuthAppType    string   `json:"auth_app_Type"`
 }
 
 // ProjectSetting contains project configuration.
@@ -47,6 +48,7 @@ type ProjectSetting struct {
 	CurrentAppName string   `json:"current_app_name"`
 	BackTick       string   `json:"back_tick"`
 	AuthAppName    string   `json:"auth_app_name"`
+	AuthAppType    string   `json:"auth_app_type"`
 }
 
 // Contains checks if a string is in the AppNames slice.
@@ -89,6 +91,7 @@ type Model struct {
 	AuthAppName  string         `json:"auth_app_name"`
 	SearchFields []string       `json:"search_fields"`
 	Relations    []Relationship `json:"relations"`
+	AuthAppType  string         `json:"auth_app_type"`
 }
 
 // Relationship defines model relationships.
@@ -201,6 +204,7 @@ func initializeRenderData() {
 	// Ensure RenderData.BackTick is set correctly.
 	RenderData.BackTick = "`"
 	RenderData.AuthAppName = ProjectSettings.AuthAppName
+	RenderData.AuthAppType = ProjectSettings.AuthAppType
 	// Loop through each model in RenderData.Models
 	for i := range RenderData.Models { // Use range with index to modify the model directly
 		// Directly modify the model in the slice using its index.
@@ -210,6 +214,7 @@ func initializeRenderData() {
 		model.LowerName = strings.ToLower(model.Name)
 		model.AppName = RenderData.AppName         // Set AppName from RenderData
 		model.AuthAppName = RenderData.AuthAppName // Set AppName from RenderData
+		model.AuthAppType = RenderData.AuthAppType // Set AuthAppType from RenderData
 		model.ProjectName = RenderData.ProjectName // Set ProjectName from RenderData
 		model.BackTick = "`"                       // Set backtick for the model
 
@@ -268,11 +273,17 @@ func initializeRelations(model *Model) []Relationship {
 }
 
 // CommonProjectName saves the project name into the project JSON file.
-func CommonProjectName(projectName string, authAppName string) {
+func CommonProjectName(projectName string, authAppName string, authAppType string) {
 	if authAppName == "" {
 		authAppName = "django_auth"
 	}
-	data, _ := json.MarshalIndent(&ProjectSetting{ProjectName: projectName, AuthAppName: authAppName}, "", "  ")
+	if authAppType == "" {
+		authAppType = "standalone"
+	} else {
+		authAppType = "sso"
+	}
+
+	data, _ := json.MarshalIndent(&ProjectSetting{ProjectName: projectName, AuthAppName: authAppName, AuthAppType: authAppType}, "", "  ")
 	if err := writeToFile("project.json", data); err != nil {
 		fmt.Println("Error writing to file:", err)
 	}

@@ -772,7 +772,7 @@ var blueAuthJSONTemplate = `
         {
           "name": "LastLogin",
           "type": "time.Time",
-          "annotation": "gorm:\"constraint:not null; default:current_timestamp;\" json:\"last_login,omitempty\"",
+          "annotation": "gorm:\"constraint:not null;\" json:\"last_login,omitempty\"",
           "curd_flag": "true$false$false$false$false$false"
         },
         {
