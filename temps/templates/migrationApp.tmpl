@@ -1,41 +1,4 @@
-package temps
 
-import (
-	"os"
-	"text/template"
-)
-
-func MigrationFrame() {
-	//  this is creating manger file inside the manager folder
-	RenderData.ProjectName = ProjectSettings.ProjectName
-	RenderData.AppNames = ProjectSettings.AppNames
-	RenderData.BackTick = "`"
-	// ############################################################
-	migration_tmpl, err := template.New("RenderData").Funcs(FuncMap).Parse(migrationTemplate)
-	if err != nil {
-		panic(err)
-	}
-
-	// Create the models directory if it does not exist
-	err = os.MkdirAll("manager", os.ModePerm)
-	if err != nil {
-		panic(err)
-	}
-
-	migration_file, err := os.Create("manager/migrate.go")
-	if err != nil {
-		panic(err)
-	}
-	defer migration_file.Close()
-
-	err = migration_tmpl.Execute(migration_file, RenderData)
-	if err != nil {
-		panic(err)
-	}
-
-}
-
-var migrationTemplate = `
 package manager
 
 import (
@@ -97,11 +60,17 @@ func init_migrate() {
 
 func populate_migrate() {
 {{- if eq .AuthAppType "standalone" }}
-    {{- range .AppNames}}
-	{{ . | replaceString }}.Populate(false)
-	{{- end}}
-{{- end}}
-	fmt.Println("Auth Populated Sucessfuly Database Models sucessfully")
+    {{- range .AppNames }}
+    {{ . | replaceString }}.Populate(false)
+    {{- end }}
+    fmt.Println("Auth Populated Successfully. Database Models populated successfully.")
+{{- else if eq .AuthAppType "sso" }}
+    {{- range .AppNames }}
+    {{ . | replaceString }}.ResourceMigration()
+    {{- end }}
+    fmt.Println("Admin Resources Created Successfully. Database Models populated successfully.")
+{{- end }}
+    fmt.Println("Resources Metadata Created to Database Models successfully.")
 }
 
 func create_views() {
@@ -124,5 +93,3 @@ func init() {
 	goFrame.AddCommand({{.AppName | replaceString }}clean)
 	goFrame.AddCommand(createsuperuser)
 }
-
-`

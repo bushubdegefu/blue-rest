@@ -49,6 +49,7 @@ type ProjectSetting struct {
 	BackTick       string   `json:"back_tick"`
 	AuthAppName    string   `json:"auth_app_name"`
 	AuthAppType    string   `json:"auth_app_type"`
+	Models         []Model  `json:"models"`
 }
 
 // Contains checks if a string is in the AppNames slice.
@@ -275,15 +276,26 @@ func initializeRelations(model *Model) []Relationship {
 // CommonProjectName saves the project name into the project JSON file.
 func CommonProjectName(projectName string, authAppName string, authAppType string) {
 	if authAppName == "" {
-		authAppName = "django_auth"
-	}
-	if authAppType == "" {
-		authAppType = "standalone"
-	} else {
-		authAppType = "sso"
+		authAppName = "admin_app"
 	}
 
-	data, _ := json.MarshalIndent(&ProjectSetting{ProjectName: projectName, AuthAppName: authAppName, AuthAppType: authAppType}, "", "  ")
+	if authAppType == "standalone" {
+		authAppType = "standalone"
+	} else if authAppType == "sso" {
+		authAppType = "sso"
+	} else {
+		authAppType = "standalone"
+
+	}
+
+	pj_setting := ProjectSetting{
+		ProjectName: projectName,
+		AuthAppName: authAppName,
+		AuthAppType: authAppType,
+		BackTick:    "`",
+	}
+
+	data, _ := json.MarshalIndent(&pj_setting, "", "  ")
 	if err := writeToFile("project.json", data); err != nil {
 		fmt.Println("Error writing to file:", err)
 	}
@@ -316,4 +328,5 @@ func InitProjectJSON() {
 	if err := decoder.Decode(&ProjectSettings); err != nil {
 		fmt.Println("project.json not found, please initialize it.")
 	}
+	ProjectSettings.BackTick = "`"
 }

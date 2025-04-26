@@ -5,6 +5,7 @@ import (
 	"os/exec"
 
 	"github.com/bushubdegefu/blue-rest/temps"
+	"github.com/bushubdegefu/blue-rest/temps/generator"
 	"github.com/spf13/cobra"
 )
 
@@ -14,8 +15,12 @@ var (
 		Short: "Generate basic structure files to start an app using Fiber",
 		Long:  `Generate the basic structure files to start an app using Fiber.`,
 		Run: func(cmd *cobra.Command, args []string) {
-
+			// Initialize the project settings
 			temps.InitProjectJSON()
+			temps.RenderData.ProjectName = temps.ProjectSettings.ProjectName
+			temps.RenderData.AppNames = temps.ProjectSettings.AppNames
+			temps.RenderData.AuthAppType = temps.ProjectSettings.AuthAppType
+
 			appName, _ := cmd.Flags().GetString("app")
 			globalName, _ := cmd.Flags().GetBool("global")
 
@@ -25,15 +30,21 @@ var (
 					fmt.Printf("Error loading data: %v\n", err)
 					return
 				}
-				temps.FiberFrameSetupAndMiddleware(appName)
+
+				generator.GenerateFiberAppMiddleware(temps.RenderData)
+				generator.GenerateFiberSetup(temps.RenderData)
 				if appName == temps.ProjectSettings.AuthAppName {
-					temps.AuthUtilsFrame(appName)
-					temps.AuthLoginFrame(appName, "fiber")
+					temps.ProjectSettings.CurrentAppName = appName
+					generator.GenerateJWTUtils(temps.ProjectSettings)
+					generator.GenerateUtilsApp(temps.ProjectSettings)
+					loginFrame(appName, "fiber")
 				}
 
 			} else if globalName {
-				temps.FiberAppAndMiddleware()
+				generator.GenerateGlobalFiberAppMiddleware(temps.RenderData)
+				generator.GenerateAppFiberGlobal(temps.RenderData)
 				runSwagInitForApps()
+
 			} else {
 				fmt.Println("No app name specified")
 			}
@@ -43,6 +54,8 @@ var (
 )
 
 func runSwagInitForApps() {
+	temps.InitProjectJSON()
+	// swag init --generalInfo setup.go --output  blue-auth/docs --dir=blue-auth,common
 	for _, appName := range temps.ProjectSettings.AppNames {
 		// Construct paths for generalInfo, output, and dir
 		// generalInfo := filepath.Join(appName, "setup.go")

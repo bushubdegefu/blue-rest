@@ -1,0 +1,438 @@
+package controllers
+
+import (
+	"net/http"
+	"time"
+	"fmt"
+
+	"{{.ProjectName}}/{{ .CurrentAppName}}/models"
+	"{{.ProjectName}}/{{ .CurrentAppName}}/utils"
+
+	"{{.ProjectName}}/common"
+	"{{.ProjectName}}/observe"
+	"github.com/go-playground/validator/v10"
+	"github.com/gofiber/fiber/v2"
+	"gorm.io/gorm"
+)
+
+// Login Request for Endpoint
+type LoginPost struct {
+	GrantType string {{.BackTick}}json:"grant_type" validate:"required" example:"authorization_code,refresh_token,token_decode"{{.BackTick}}
+	Email     string {{.BackTick}}json:"email" validate:"email,min=6,max=32"{{.BackTick}}
+	Password  string {{.BackTick}}json:"password"{{.BackTick}}
+	Token     string {{.BackTick}}json:"token"{{.BackTick}}
+}
+
+// Access token Response
+type TokenResponse struct {
+	AccessToken  string {{.BackTick}}json:"access_token"{{.BackTick}}
+	RefreshToken string {{.BackTick}}json:"refresh_token"{{.BackTick}}
+	TokenType    string {{.BackTick}}json:"token_type"{{.BackTick}}
+}
+
+{{- if eq .AuthAppType "sso" }}
+// @ID login
+// @Summary Auth
+// @Description Login
+// @Tags Authentication
+// @Accept json
+// @Produce json
+// @Param user body LoginPost true "Login"
+// @Success 202 {object} common.ResponseHTTP{data=TokenResponse{}}
+// @Failure 404 {object} common.ResponseHTTP{}
+// @Failure 503 {object} common.ResponseHTTP{}
+// @Router /{{.CurrentAppName  | replaceString }}/login [post]
+func Login(contx *fiber.Ctx) error {
+	//  Getting tracer context
+	ctx := contx.Locals("tracer")
+	tracer, _ := ctx.(*observe.RouteTracer)
+
+	//  Getting Database connection
+	db, _ := contx.Locals("db").(*gorm.DB)
+
+	// validator initialization
+	validate := validator.New()
+
+	//validating post data
+	login_request := new(LoginPost)
+
+	//first parse request data
+	if err := contx.BodyParser(&login_request); err != nil {
+		return contx.Status(http.StatusBadRequest).JSON(common.ResponseHTTP{
+			Success: false,
+			Message: err.Error(),
+			Data:    nil,
+		})
+	}
+
+	// then validate structure
+	if err := validate.Struct(login_request); err != nil {
+		return contx.Status(http.StatusBadRequest).JSON(common.ResponseHTTP{
+			Success: false,
+			Message: err.Error(),
+			Data:    nil,
+		})
+	}
+
+	switch login_request.GrantType {
+	case "authorization_code":
+		var user models.User
+		var scopes []models.Scope
+		var groups []models.Group
+
+		// Getting User
+		res := db.WithContext(tracer.Tracer).Model(&models.User{}).Where("email = ? AND disabled = ?", login_request.Email, false).First(&user)
+		if res.Error != nil {
+
+			return contx.Status(http.StatusServiceUnavailable).JSON(common.ResponseHTTP{
+				Success: false,
+				Message: res.Error.Error(),
+				Data:    nil,
+			})
+		}
+		// Getting User Permissions
+		scope_join_string := "INNER JOIN user_scopes up ON scopes.id = up.scope_id"
+		res_per := db.WithContext(tracer.Tracer).Model(&models.Scope{}).Joins(scope_join_string).Where("up.user_id = ?", user.ID).Scan(&scopes)
+		if res_per.Error != nil {
+			return contx.Status(http.StatusServiceUnavailable).JSON(common.ResponseHTTP{
+				Success: false,
+				Message: res.Error.Error(),
+				Data:    nil,
+			})
+		}
+
+		// Getting User Groups
+		groups_join_string := "INNER JOIN user_groups ug ON groups.id = ug.group_id"
+		res_gr := db.WithContext(tracer.Tracer).Model(&models.Group{}).Joins(groups_join_string).Where("ug.user_id = ?", user.ID).Scan(&groups)
+		if res_gr.Error != nil {
+			return contx.Status(http.StatusServiceUnavailable).JSON(common.ResponseHTTP{
+				Success: false,
+				Message: res.Error.Error(),
+				Data:    nil,
+			})
+		}
+
+		// Checking Password match
+		if utils.PasswordsMatch(user.Password, login_request.Password) {
+			// preparing permissions for JWT token hash
+			user_scopes := make([]string, 0, 20)
+			for _, value := range scopes {
+				user_scopes = append(user_scopes, string(value.Name))
+			}
+			// preparing groups for JWT token hash
+			user_groups := make([]string, 0, 20)
+			for _, value := range groups {
+				user_groups = append(user_groups, string(value.Name))
+			}
+
+			accessString, _ := utils.CreateJWTToken(user, user_scopes, user_groups, 60)
+			refreshString, _ := utils.CreateJWTToken(user, user_scopes, user_groups, 65)
+
+			data := TokenResponse{
+				AccessToken:  accessString,
+				RefreshToken: refreshString,
+				TokenType:    "Bearer",
+			}
+			// Update the LastLogin field to the current time
+			user.LastLogin = time.Now()
+
+			// Save the updated user record
+			if err := db.WithContext(tracer.Tracer).Save(&user).Error; err != nil {
+				fmt.Println("Error updating user last login:", err)
+			}
+
+			return contx.Status(http.StatusAccepted).JSON(common.ResponseHTTP{
+				Success: true,
+				Message: "Authorization Granted",
+				Data:    data,
+			})
+		} else {
+			return contx.Status(http.StatusUnauthorized).JSON(common.ResponseHTTP{
+				Success: false,
+				Message: "Make sure You are Providing the Correct Credentials",
+				Data:    "Authenthication Failed",
+			})
+		}
+	case "refresh_token":
+		claims, err := utils.ParseJWTToken(login_request.Token)
+		user_scopes := claims.Scopes
+		user_groups := claims.Groups
+		user := models.User{
+			ID:        uint(claims.UserID),
+			Email:     claims.Email,
+			FirstName: claims.FirstName,
+			LastName:  claims.LastName,
+			UUID:      claims.UUID,
+		}
+		if err == nil {
+			accessString, _ := utils.CreateJWTToken(user, user_scopes, user_groups, 60)
+			refreshString, _ := utils.CreateJWTToken(user, user_scopes, user_groups, 65)
+			data := TokenResponse{
+				AccessToken:  accessString,
+				RefreshToken: refreshString,
+				TokenType:    "Bearer",
+			}
+			return contx.Status(http.StatusAccepted).JSON(common.ResponseHTTP{
+				Success: true,
+				Message: "Authorization Granted",
+				Data:    data,
+			})
+		}
+
+		return contx.Status(http.StatusBadRequest).JSON(common.ResponseHTTP{
+			Success: false,
+			Message: "Request Type Unknown",
+			Data:    "Currently Not Implemented",
+		})
+	case "token_decode":
+		claims, err := utils.ParseJWTToken(login_request.Token)
+
+		if err == nil {
+			return contx.Status(http.StatusAccepted).JSON(common.ResponseHTTP{
+				Success: true,
+				Message: "Token decode sucessfull",
+				Data:    claims,
+			})
+		}
+		return contx.Status(http.StatusBadRequest).JSON(common.ResponseHTTP{
+			Success: false,
+			Message: err.Error(),
+			Data:    "Unknown grant type",
+		})
+	default:
+		return contx.Status(http.StatusBadRequest).JSON(common.ResponseHTTP{
+			Success: false,
+			Message: "Request Type Unknown",
+			Data:    "Unknown grant type",
+		})
+	}
+}
+{{- end }}
+
+
+{{ if eq .AuthAppType "standalone" }}
+// @ID login
+// @Summary Auth
+// @Description Login
+// @Tags Authentication
+// @Accept json
+// @Produce json
+// @Param user body LoginPost true "Login"
+// @Success 202 {object} common.ResponseHTTP{data=TokenResponse{}}
+// @Failure 404 {object} common.ResponseHTTP{}
+// @Failure 503 {object} common.ResponseHTTP{}
+// @Router /{{.CurrentAppName  | replaceString }}/login [post]
+func Login(contx *fiber.Ctx) error {
+	//  Getting tracer context
+	ctx := contx.Locals("tracer")
+	tracer, _ := ctx.(*observe.RouteTracer)
+
+	//  Getting Database connection
+	db, _ := contx.Locals("db").(*gorm.DB)
+
+	// validator initialization
+	validate := validator.New()
+
+	//validating post data
+	login_request := new(LoginPost)
+
+	//first parse request data
+	if err := contx.BodyParser(&login_request); err != nil {
+		return contx.Status(http.StatusBadRequest).JSON(common.ResponseHTTP{
+			Success: false,
+			Message: err.Error(),
+			Data:    nil,
+		})
+	}
+
+	// then validate structure
+	if err := validate.Struct(login_request); err != nil {
+		return contx.Status(http.StatusBadRequest).JSON(common.ResponseHTTP{
+			Success: false,
+			Message: err.Error(),
+			Data:    nil,
+		})
+	}
+
+	switch login_request.GrantType {
+	case "authorization_code":
+		var user models.User
+		var permissions []models.Permission
+		var groups []models.Group
+
+		// Getting User
+		res := db.WithContext(tracer.Tracer).Model(&models.User{}).Where("email = ? AND is_active = ?", login_request.Email, true).First(&user)
+		if res.Error != nil {
+
+			return contx.Status(http.StatusServiceUnavailable).JSON(common.ResponseHTTP{
+				Success: false,
+				Message: res.Error.Error(),
+				Data:    nil,
+			})
+		}
+		// Getting User Permissions
+		permission_join_string := "INNER JOIN user_permissions up ON permissions.id = up.permission_id"
+		res_per := db.WithContext(tracer.Tracer).Model(&models.Permission{}).Joins(permission_join_string).Where("up.user_id = ?", user.ID).Scan(&permissions)
+		if res_per.Error != nil {
+			return contx.Status(http.StatusServiceUnavailable).JSON(common.ResponseHTTP{
+				Success: false,
+				Message: res.Error.Error(),
+				Data:    nil,
+			})
+		}
+
+		// Getting User Groups
+		groups_join_string := "INNER JOIN user_groups ug ON groups.id = ug.group_id"
+		res_gr := db.WithContext(tracer.Tracer).Model(&models.Group{}).Joins(groups_join_string).Where("ug.user_id = ?", user.ID).Scan(&groups)
+		if res_gr.Error != nil {
+			return contx.Status(http.StatusServiceUnavailable).JSON(common.ResponseHTTP{
+				Success: false,
+				Message: res.Error.Error(),
+				Data:    nil,
+			})
+		}
+
+		// Checking Password match
+		if utils.PasswordsMatch(user.Password, login_request.Password) {
+			// preparing permissions for JWT token hash
+			user_permissions := make([]string, 0, 20)
+			for _, value := range permissions {
+				user_permissions = append(user_permissions, string(value.Codename))
+			}
+			// preparing groups for JWT token hash
+			user_groups := make([]string, 0, 20)
+			for _, value := range groups {
+				user_groups = append(user_groups, string(value.Name))
+			}
+
+			accessString, _ := utils.CreateJWTToken(user, user_permissions, user_groups, 60)
+			refreshString, _ := utils.CreateJWTToken(user, user_permissions, user_groups, 65)
+
+			data := TokenResponse{
+				AccessToken:  accessString,
+				RefreshToken: refreshString,
+				TokenType:    "Bearer",
+			}
+			// Update the LastLogin field to the current time
+			user.LastLogin = time.Now()
+
+			// Save the updated user record
+			if err := db.WithContext(tracer.Tracer).Save(&user).Error; err != nil {
+				fmt.Println("Error updating user last login:", err)
+			}
+
+			return contx.Status(http.StatusAccepted).JSON(common.ResponseHTTP{
+				Success: true,
+				Message: "Authorization Granted",
+				Data:    data,
+			})
+		} else {
+			return contx.Status(http.StatusUnauthorized).JSON(common.ResponseHTTP{
+				Success: false,
+				Message: "Make sure You are Providing the Correct Credentials",
+				Data:    "Authenthication Failed",
+			})
+		}
+	case "refresh_token":
+		claims, err := utils.ParseJWTToken(login_request.Token)
+	
+		user_permissions := claims.Permissions
+		user_groups := claims.Groups
+		user := models.User{
+			ID:        uint(claims.UserID),
+			Email:     claims.Email,
+			FirstName: claims.FirstName,
+			LastName:  claims.LastName,
+		}
+		if err == nil {
+			accessString, _ := utils.CreateJWTToken(user, user_permissions, user_groups, 60)
+			refreshString, _ := utils.CreateJWTToken(user, user_permissions, user_groups, 65)
+			data := TokenResponse{
+				AccessToken:  accessString,
+				RefreshToken: refreshString,
+				TokenType:    "Bearer",
+			}
+			return contx.Status(http.StatusAccepted).JSON(common.ResponseHTTP{
+				Success: true,
+				Message: "Authorization Granted",
+				Data:    data,
+			})
+		}
+
+		return contx.Status(http.StatusBadRequest).JSON(common.ResponseHTTP{
+			Success: false,
+			Message: "Request Type Unknown",
+			Data:    "Currently Not Implemented",
+		})
+	case "token_decode":
+		claims, err := utils.ParseJWTToken(login_request.Token)
+
+		if err == nil {
+			return contx.Status(http.StatusAccepted).JSON(common.ResponseHTTP{
+				Success: true,
+				Message: "Token decode sucessfull",
+				Data:    claims,
+			})
+		}
+		return contx.Status(http.StatusBadRequest).JSON(common.ResponseHTTP{
+			Success: false,
+			Message: err.Error(),
+			Data:    "Unknown grant type",
+		})
+	default:
+		return contx.Status(http.StatusBadRequest).JSON(common.ResponseHTTP{
+			Success: false,
+			Message: "Request Type Unknown",
+			Data:    "Unknown grant type",
+		})
+	}
+}
+{{- end}}
+
+// ###############################################################################
+// {{.CurrentAppName  | replaceStringCapitalize  }} endpoint about schemas
+// ###############################################################################
+type {{.CurrentAppName  | replaceStringCapitalize  }}DBStats struct {
+	
+	{{- range .Models }}
+	Total{{.Name}}s            int    {{.BackTick}}json:"total_{{.LowerName}}s"{{.BackTick}}
+	{{- end }}
+}
+
+// Service Stat
+// @Summary Auth
+// @Description Stat
+// @Tags Authentication
+// @Accept json
+// @Produce json
+// @Success 200 {object} common.ResponseHTTP{data={{.CurrentAppName  | replaceStringCapitalize  }}DBStats{}}
+// @Failure 404 {object} common.ResponseHTTP{}
+// @Failure 503 {object} common.ResponseHTTP{}
+// @Router /{{.CurrentAppName | replaceString }}/stats [get]
+func DbStatEndpoint(contx *fiber.Ctx) error {
+	//  Getting tracer context
+	ctx := contx.Locals("tracer")
+	tracer, _ := ctx.(*observe.RouteTracer)
+
+	//  Getting Database connection
+	db, _ := contx.Locals("db").(*gorm.DB)
+
+	// Getting Stats
+	var stats {{.CurrentAppName  | replaceStringCapitalize  }}DBStats
+	res := db.WithContext(tracer.Tracer).Raw("SELECT * FROM {{.CurrentAppName | replaceString }}_stats").Scan(&stats)
+	if res.Error != nil {
+
+		return contx.Status(http.StatusServiceUnavailable).JSON(common.ResponseHTTP{
+			Success: false,
+			Message: res.Error.Error(),
+			Data:    nil,
+		})
+	}
+
+	return contx.Status(http.StatusAccepted).JSON(common.ResponseHTTP{
+		Success: true,
+		Message: "Authorization Granted",
+		Data:    stats,
+	})
+
+}

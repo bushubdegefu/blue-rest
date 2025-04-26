@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/bushubdegefu/blue-rest/temps"
+	"github.com/bushubdegefu/blue-rest/temps/generator"
 	"github.com/spf13/cobra"
 )
 
@@ -34,18 +35,22 @@ var (
 
 				// If no module name, fetch the project name
 				if moduleName == "" {
-					moduleName = temps.GetProjectName()
+					temps.InitProjectJSON()
+
 				}
+
 				// Get current working directory
 				currentDir, _ := os.Getwd()
-
-				temps.Frame()
+				temps.RenderData.ProjectName = moduleName
+				generator.GenerateMainAndManager(temps.RenderData)
+				generator.GenerateConfig(temps.RenderData)
 
 				// Handle appName if provided
 				if appName != "" {
-					handleAppInitialization(appName, moduleName, currentDir, authAppName)
+					handleAppInitialization(appName, currentDir, authAppName)
 				}
 			}
+			temps.CommonCMD()
 		},
 	}
 	configcli = &cobra.Command{
@@ -54,8 +59,12 @@ var (
 		Long:  `Template Configuration Variables need for the apps registerd to run.`,
 		Run: func(cmd *cobra.Command, args []string) {
 			temps.InitProjectJSON()
-			temps.EnvGenForApps()
-			temps.EnvConfigReader()
+			temps.RenderData.ProjectName = temps.ProjectSettings.ProjectName
+			temps.RenderData.AppNames = temps.ProjectSettings.AppNames
+			generator.GenerateConfig(temps.RenderData)
+			generator.GenerateConfigEnv(temps.RenderData)
+			generator.GenerateConfigAppEnv(temps.RenderData)
+
 		},
 	}
 
@@ -77,6 +86,8 @@ var (
 					fmt.Printf("Error loading data: %v\n", err)
 					return
 				}
+				temps.RenderData.ProjectName = temps.ProjectSettings.ProjectName
+				temps.RenderData.AppName = appName
 			}
 
 			// Generate structure based on project type
@@ -85,17 +96,21 @@ var (
 	}
 )
 
-func handleAppInitialization(appName, moduleName, currentDir, authAppName string) {
+func handleAppInitialization(appName, currentDir, authAppName string) {
 
+	temps.RenderData.AppName = appName
 	temps.ProjectSettings.AppendAppName(appName, authAppName)
-
 	// Create app directory and switch to it
 	os.Mkdir(appName, os.ModePerm)
 	newDir := filepath.Join(currentDir, appName)
-
 	_ = os.Chdir(newDir)
-
-	temps.CommonTargetAuthJSON(moduleName, appName)
+	if temps.ProjectSettings.AuthAppType == "sso" {
+		// Generate the SSO schema app
+		generator.GenerateSSOAuth(temps.RenderData)
+	} else {
+		// Generate the Django auth Schema app
+		generator.GenerateDjangoAuth(temps.RenderData)
+	}
 }
 
 func handleAppDirectory(appName string) {
@@ -106,15 +121,30 @@ func handleAppDirectory(appName string) {
 
 func handleProjectType(projectType, frame string, cmd *cobra.Command) {
 	switch projectType {
-	case "json":
-		moduleName, _ := cmd.Flags().GetString("name")
-		temps.CommonTargetJSON(moduleName)
 	case "git":
 		appName, _ := cmd.Flags().GetString("app")
 		if appName == "" {
 			basiccmd()
 		} else {
 			fmt.Println("git does not need appName flag")
+		}
+	case "api":
+		appName, _ := cmd.Flags().GetString("app")
+		if appName == "" {
+			fmt.Println("api flag need additional flag app with ")
+		} else {
+			temps.ClientAuthAndIndexJSFrame()
+			temps.ClientJSFrame()
+		}
+	case "oauth":
+		appName, _ := cmd.Flags().GetString("app")
+		if appName == "" {
+			fmt.Println("api flag need additional flag app with ")
+		} else {
+			generator.GenerateHelperOauth(temps.RenderData)
+			generator.GenerateGoogleOauth(temps.RenderData)
+			generator.GenerateMicrosoftOauth(temps.RenderData)
+			temps.ClientJSFrame()
 		}
 	case "otel":
 		appName, _ := cmd.Flags().GetString("app")
@@ -136,7 +166,7 @@ func handleProjectType(projectType, frame string, cmd *cobra.Command) {
 		appName, _ := cmd.Flags().GetString("app")
 		if appName == "" {
 			temps.InitProjectJSON()
-			temps.LogFilesFrame()
+			generator.GenerateLogs(temps.RenderData)
 		} else {
 			fmt.Println("Does not require app flag")
 		}
@@ -161,7 +191,8 @@ func handleProjectType(projectType, frame string, cmd *cobra.Command) {
 		if appName == "" {
 			fmt.Println("tasks flag need additional flag app")
 		} else {
-			standtasks()
+			generator.GenerateTasks(temps.RenderData)
+
 			temps.CommonCMD()
 		}
 	case "pagination":
@@ -169,7 +200,7 @@ func handleProjectType(projectType, frame string, cmd *cobra.Command) {
 		if appName != "" {
 			fmt.Println("pagination type does not need app flag")
 		} else {
-			commongormpagination()
+			generator.GenerateCommon(temps.RenderData)
 			temps.CommonCMD()
 		}
 	case "migration":
@@ -181,7 +212,7 @@ func handleProjectType(projectType, frame string, cmd *cobra.Command) {
 			temps.RenderData.AuthAppName = temps.ProjectSettings.AuthAppName
 			temps.RenderData.AppName = temps.ProjectSettings.AuthAppName
 			temps.RenderData.AppNames = temps.ProjectSettings.AppNames
-			temps.MigrationFrame()
+			generator.GenerateAppDatabaseMigration(temps.RenderData)
 			temps.CommonCMD()
 		}
 	default:
@@ -212,17 +243,8 @@ func basiccmd() {
 	temps.HaproxyFrame()
 }
 
-func standtasks() {
-	temps.TasksFrame()
-
-}
-
 func rsa_basic() {
 	temps.RSAHelper()
-}
-
-func commongormpagination() {
-	temps.CommonFrame()
 }
 
 func standardrabbit() {
@@ -240,7 +262,8 @@ func standpublish() {
 }
 
 func standarddatabase() {
-	temps.DbConnDataFrame()
+	temps.InitProjectJSON()
+	generator.GenerateDBConn(temps.ProjectSettings)
 }
 
 func init() {

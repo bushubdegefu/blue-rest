@@ -1,0 +1,24 @@
+package testsetting
+
+import (
+	{{.AppName | replaceString }} "{{ .ProjectName }}/{{.AppName }}"
+	models "{{.ProjectName}}/{{.AppName }}/models"
+	"github.com/gofiber/fiber/v2"
+	"github.com/joho/godotenv"
+)
+
+var (
+	TestApp   *fiber.App
+	GroupPath = "/api/v1/{{.AppName | replaceString }}"
+)
+
+func SetupTestApp() {
+	err := godotenv.Load(".test.env")
+	if err != nil {
+		panic("Error loading .env file")
+	}
+
+	models.InitDatabase(true)
+	TestApp = fiber.New()
+	{{.AppName | replaceString }}.SetupRoutes(TestApp)
+}

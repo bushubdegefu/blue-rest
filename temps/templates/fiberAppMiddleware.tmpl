@@ -1,0 +1,38 @@
+package {{.AppName | replaceString }}
+import (
+	"fmt"
+	"net/http"
+	"strings"
+
+	"{{.ProjectName}}/database"
+	"{{.ProjectName}}/observe"
+	"{{.ProjectName}}/common"
+	"github.com/gofiber/fiber/v2"
+	"go.opentelemetry.io/otel/attribute"
+)
+
+func otelspanstarter(ctx *fiber.Ctx) error {
+	//  creating trace context from span if they exist
+	route_name := ctx.Path() + "_" + strings.ToLower(ctx.Route().Method)
+	tracer, span := observe.FiberAppSpanner(ctx, fmt.Sprintf("%v-root", route_name))
+	ctx.Locals("tracer", &observe.RouteTracer{Tracer: tracer, Span: span})
+	if err := ctx.Next(); err != nil {
+		return err
+	}
+	span.SetAttributes(attribute.String("response", ctx.Response().String()))
+	span.End()
+	return nil
+}
+
+func dbsessioninjection(ctx *fiber.Ctx) error {
+	db, err := database.ReturnSession("{{.AppName | replaceString}}")
+	if err != nil {
+		return ctx.Status(http.StatusServiceUnavailable).JSON(common.ResponseHTTP{
+			Success: false,
+			Message: err.Error(),
+			Data:    nil,
+		})
+	}
+	ctx.Locals("db", db)
+	return ctx.Next()
+}

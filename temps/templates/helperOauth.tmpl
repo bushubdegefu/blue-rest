@@ -1,0 +1,75 @@
+package oauth
+
+import (
+	"strings"
+
+	"{{.ProjectName}}/{{.AuthAppName}}/models"
+	"github.com/google/uuid"
+	"gorm.io/gorm"
+)
+
+func generateUUID() string {
+	uuid, _ := uuid.NewV7()
+	return uuid.String()
+}
+
+func trimEmail(email string) string {
+	parts := strings.SplitN(email, "@", 2)
+	return strings.ToLower(parts[0])
+}
+
+func createUserIfNotExistsGoogle(db *gorm.DB, user *GoogleUserProfile) error {
+	// Check if the user already exists in the database
+	var local_user models.User
+	if err := db.Where("email = ?", user.Email).First(&local_user).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			// User does not exist, create a new user
+			newUser := &models.User{
+				FirstName:    user.GivenName,  // Replace with actual first name
+				MiddleName:   user.GivenName,  // Replace with actual first name
+				LastName:     user.FamilyName, // Replace with actual first name
+				Email:        user.Email,
+				Password:     "default@123",
+				Username:     trimEmail(user.Email),
+				UUID:         generateUUID(),
+				GoogleID:     user.Sub,
+				AuthProvider: "Google", // or "Microsoft" based on the provider
+			}
+			if err := db.Create(&newUser).Error; err != nil {
+				return err
+			}
+		} else {
+			// Return the error if it is not ErrRecordNotFound
+			return err
+		}
+	}
+	return nil
+}
+
+func createUserIfNotExistsMicrosoft(db *gorm.DB, user *MicrosoftUserProfile) error {
+	// Check if the user already exists in the database
+	var local_user models.User
+	if err := db.Where("email = ?", user.Email).First(&local_user).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			// User does not exist, create a new user
+			newUser := &models.User{
+				FirstName:    user.GivenName, // Replace with actual first name
+				MiddleName:   user.GivenName, // Replace with actual first name
+				LastName:     user.Surname,   // Replace with actual first name
+				Email:        user.Email,
+				Password:     "default@123",
+				Username:     trimEmail(user.Email),
+				UUID:         generateUUID(),
+				MicrosoftID:  user.ID,
+				AuthProvider: "Microsoft", // or "Microsoft" based on the provider
+			}
+			if err := db.Create(&newUser).Error; err != nil {
+				return err
+			}
+		} else {
+			// Return the error if it is not ErrRecordNotFound
+			return err
+		}
+	}
+	return nil
+}

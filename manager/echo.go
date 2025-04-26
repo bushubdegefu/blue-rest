@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/bushubdegefu/blue-rest/temps"
+	"github.com/bushubdegefu/blue-rest/temps/generator"
 	"github.com/spf13/cobra"
 )
 
@@ -14,7 +15,12 @@ var (
 		Long:  `generate the basic structure file to start app using echo`,
 		Run: func(cmd *cobra.Command, args []string) {
 
+			// Initialize the project settings
 			temps.InitProjectJSON()
+			temps.RenderData.ProjectName = temps.ProjectSettings.ProjectName
+			temps.RenderData.AppNames = temps.ProjectSettings.AppNames
+			temps.RenderData.AuthAppType = temps.ProjectSettings.AuthAppType
+
 			appName, _ := cmd.Flags().GetString("app")
 			globalName, _ := cmd.Flags().GetBool("global")
 
@@ -24,14 +30,18 @@ var (
 					fmt.Printf("Error loading data: %v\n", err)
 					return
 				}
-				temps.EchoFrameSetupAndMiddleware(appName)
+				generator.GenerateFiberAppMiddleware(temps.RenderData)
+				generator.GenerateFiberSetup(temps.RenderData)
 				if appName == temps.ProjectSettings.AuthAppName {
-					temps.AuthLoginFrame(appName, "echo")
-					temps.AuthUtilsFrame(appName)
+					temps.ProjectSettings.CurrentAppName = appName
+					generator.GenerateJWTUtils(temps.ProjectSettings)
+					generator.GenerateUtilsApp(temps.ProjectSettings)
+					loginFrame(appName, "echo")
 				}
 
 			} else if globalName {
-				temps.EchoAppAndMiddleware()
+				generator.GenerateGlobalEchoAppMiddleware(temps.RenderData)
+				generator.GenerateAppEchoGlobal(temps.RenderData)
 				runSwagInitForApps()
 			} else {
 				fmt.Println("No app name specified")
@@ -40,6 +50,20 @@ var (
 		},
 	}
 )
+
+func loginFrame(appName, frame string) {
+	temps.ProjectSettings.CurrentAppName = appName
+	generator.GenerateJWTUtils(temps.ProjectSettings)
+	generator.GenerateUtilsApp(temps.ProjectSettings)
+	temps.ProjectSettings.Models = temps.RenderData.Models
+	// Generate login frame
+	if frame == "fiber" {
+		generator.GenerateFiberLogin(temps.ProjectSettings)
+	} else {
+		generator.GenerateEchoLogin(temps.ProjectSettings)
+
+	}
+}
 
 func init() {
 	echocli.Flags().StringP("app", "a", "", "Specify the app name, so that echo app will be generated")

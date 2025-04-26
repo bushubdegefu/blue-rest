@@ -1,0 +1,87 @@
+package utils
+
+import (
+	"math/rand"
+	"strconv"
+
+	"{{.ProjectName}}/{{.CurrentAppName}}/models"
+	"{{.ProjectName}}/configs"
+	"{{.ProjectName}}/database"
+)
+
+const (
+	charsetLen = 62
+	charset    = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+)
+
+func GenerateRandomString(length int) (string, error) {
+	result := make([]byte, length)
+
+	for i := 0; i < length; i++ {
+		index := rand.Intn(charsetLen)
+		result[i] = charset[index]
+	}
+
+	return string(result), nil
+}
+
+func JWTSaltUpdate() {
+	dbcon, _ := database.ReturnSession("{{ .CurrentAppName | replaceString}}")
+
+	//  getting salt length from configuration file
+	salt_length, _ := strconv.Atoi(configs.AppConfig.Get("JWT_SALT_LENGTH"))
+
+	//  generating for salt A
+	salt_a, _ := GenerateRandomString(salt_length)
+
+	//  defining jwt _object to work with
+	var jwt_object models.JWTSalt
+
+	// Fethching the JWT object if it exists
+	dbcon.Model(&models.JWTSalt{}).Where("id = ?", 1).First(&jwt_object)
+
+	// If it exists updating or creating if it does not exist
+	if jwt_object.ID == 1 {
+		// salt_b =
+		jwt_object.SaltB = jwt_object.SaltA
+		jwt_object.SaltA = salt_a
+
+		tx := dbcon.Begin()
+		if err := dbcon.Updates(&jwt_object).Error; err != nil {
+
+			tx.Rollback()
+		}
+		tx.Commit()
+	} else {
+		// generating salt b and creating new
+		salt_b, _ := GenerateRandomString(salt_length)
+		jwt_object.SaltA = salt_a
+		jwt_object.SaltB = salt_b
+
+		tx := dbcon.Begin()
+		// add  data using transaction if values are valid
+		if err := tx.Create(&jwt_object).Error; err != nil {
+
+			tx.Rollback()
+
+		}
+		tx.Commit()
+	}
+
+}
+
+func GetJWTSalt() (salt_a string, salt_b string) {
+	dbcon, _ := database.ReturnSession("{{ .CurrentAppName | replaceString}}")
+	var jwt_object models.JWTSalt
+
+	// Fethching the JWT object if it exists
+	dbcon.Model(&models.JWTSalt{}).Where("id = ?", 1).First(&jwt_object)
+
+	salt_a = jwt_object.SaltA
+	salt_b = jwt_object.SaltB
+	if salt_a == "" {
+		JWTSaltUpdate()
+	}
+	return salt_a, salt_b
+
+}

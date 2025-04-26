@@ -1,0 +1,202 @@
+package manager
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"os/signal"
+	"strconv"
+	"time"
+
+	{{- range .AppNames}}
+	{{ . | replaceString }} "{{$.ProjectName}}/{{ . }}"
+	{{- end }}
+	"{{.ProjectName}}/configs"
+	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
+	"github.com/labstack/gommon/log"
+	"github.com/madflojo/tasks"
+	"github.com/spf13/cobra"
+	"golang.org/x/time/rate"
+	echoSwagger "github.com/bushubdegefu/echo-swagger"
+
+	{{- range .AppNames}}
+	{{ . | replaceString }}_tasks "{{$.ProjectName}}/{{ . }}/bluetasks"
+	{{- end }}
+
+	"{{.ProjectName}}/observe"
+)
+
+var (
+	env                   string
+	app_otel              string
+	app_tls               string
+	echocli = &cobra.Command{
+		Use:   "run",
+		Short: "Run Development server ",
+		Long:  "Run development server",
+		Run: func(cmd *cobra.Command, args []string) {
+			switch env {
+			case "":
+				echo_run("dev")
+			default:
+				echo_run(env)
+			}
+		},
+	}
+)
+
+func echo_run(env string) {
+	//  loading dev env file first
+	configs.AppConfig.SetEnv(env)
+
+	if app_otel == "on" {
+		// Starting Otel Global tracer
+		tp := observe.InitTracer()
+		defer func() {
+			if err := tp.Shutdown(context.Background()); err != nil {
+				log.Printf("Error shutting down tracer provider: %v", err)
+			}
+		}()
+	}
+
+	// starting the app
+	app := echo.New()
+
+	// enable cross origin requests
+	app.Use(middleware.CORS())
+
+
+	// setup prom monitoring
+	observe.SetupPrometheusMetrics(app)
+
+	// Middleware stack
+	configLimit, _ := strconv.ParseFloat(configs.AppConfig.GetOrDefault("RATE_LIMIT_PER_SECOND", "50000"), 64)
+	rateLimit := rate.Limit(configLimit)
+
+	// Rate Limiting to throttle overload
+	app.Use(middleware.RateLimiter(middleware.NewRateLimiterMemoryStore(rateLimit)))
+
+	// Recover incase of panic attacks
+	app.Use(middleware.RecoverWithConfig(middleware.RecoverConfig{
+		StackSize: 1 << 10, // 1 KB
+		LogLevel:  log.ERROR,
+	}))
+
+	// Mounting Global Middleware
+	MountGlobalMiddleware(app)
+
+
+	{{-  if eq .AuthAppType  "standalone" }}
+	// Serve static files from the "dist/django_admin_ui" folder
+	app.Static("/", "./dist/django_admin_ui")
+
+	// Handle "/admin/*" route and send the "index.html" file
+	app.GET("/admin/*", func(c echo.Context) error {
+		return c.File("./dist/django_admin_ui/index.html")
+	}).Name = "Admin_UI"
+
+	{{- end }}	
+	{{- if eq .AuthAppType  "sso" }}
+	// Serve static files from the "dist/django_admin_ui" folder
+	app.Static("/", "./dist/sso_admin_ui")
+
+	// Handle "/admin/*" route and send the "index.html" file
+	app.GET("/admin/*", func(c echo.Context) error {
+		return c.File("./dist/sso_admin_ui/index.html")
+	}).Name = "Admin_UI"
+
+
+	{{- end }}
+
+	// OpenAPI documentation
+	{{- range .AppNames}}
+	//  {{ . }} Swagger Docs
+	app.GET("/{{ . | replaceString }}/docs/doc.json", func(contx echo.Context) error {
+			return contx.File("{{ . }}/docs/swagger.json")
+		}).Name = "{{ . | replaceString}}_docs_json"
+
+	app.GET("/{{ . | replaceString}}/docs/*", echoSwagger.New(echoSwagger.Config{
+		InstanceName: "{{ . | replaceString}}",
+		URL:          "/{{ . | replaceString }}/docs/doc.json", // Match the served JSON file
+	})).Name = "{{ . | replaceString}}_docs"
+	{{- end }}
+
+	// Setting up Endpoints
+	{{- range .AppNames}}
+	{{ . | replaceString }}.SetupRoutes(app)
+	{{- end }}
+
+	// building path route name path for authentication middleware
+	GetApplicationRoutes(app)
+
+	// Starting Task Scheduler ( Running task that run regularly based on the provided configs)
+	{{- range .AppNames}}
+	scd_tasks_{{ . | replaceString }} := {{ . | replaceString }}_tasks.ScheduledTasks()
+	{{- end }}
+
+	scd_tasks := []*tasks.Scheduler{
+	{{- range .AppNames}}
+		scd_tasks_{{ . | replaceString }},
+	{{- end }}
+		}
+
+
+	// Start the server
+	go startServer(app)
+
+
+	// Create a context that listens for interrupt signals (e.g., Ctrl+C).
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	// Ensure the stop function is called when the function exits to clean up resources.
+	defer stop()
+
+	// Graceful shutdown
+	waitForShutdown(app, scd_tasks, ctx)
+
+}
+
+// waitForShutdown listens for an interrupt signal (such as SIGINT) and gracefully shuts down the Echo app.
+func waitForShutdown(app *echo.Echo, scheduledTasks []*tasks.Scheduler, ctx context.Context) {
+
+	// Block and wait for an interrupt signal (this will block until the signal is received).
+	<-ctx.Done()
+	fmt.Println("Gracefully shutting down...")
+
+	// Once the interrupt signal is received, create a new context with a 10-second timeout.
+	// This will allow time for any active requests to complete before forcing shutdown.
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel() // Ensure the cancel function is called when the context is no longer needed.
+
+	// Attempt to gracefully shut down the Echo server.
+	// If an error occurs during the shutdown process, log the fatal error.
+	if err := app.Shutdown(ctx); err != nil {
+		fmt.Println(err)
+	}
+
+	// Iterate through scheduledTasks and stop each one
+		for _, task := range scheduledTasks {
+			task.Stop()
+		}
+
+	// Log a message indicating the server is being shut down gracefully.
+	fmt.Println("Gracefully shutting down...")
+}
+
+func startServer(app *echo.Echo) {
+	HTTP_PORT := configs.AppConfig.Get("HTTP_PORT")
+	if app_tls == "on" {
+		CERT_FILE := "./server.pem"
+		KEY_FILE := "./server-key.pem"
+		app.Logger.Fatal(app.StartTLS("0.0.0.0:"+HTTP_PORT, CERT_FILE, KEY_FILE))
+	} else {
+		app.Logger.Fatal(app.Start("0.0.0.0:" + HTTP_PORT))
+	}
+}
+
+func init() {
+	echocli.Flags().StringVar(&env, "env", "help", "Which environment to run for example prod or dev")
+	echocli.Flags().StringVar(&app_otel, "otel", "help", "Turn on/off OpenTelemetry tracing")
+	echocli.Flags().StringVar(&app_tls, "tls", "help", "Turn on/off tls, \"on\" for auto on and \"off\" for auto off")
+	goFrame.AddCommand(echocli)
+}

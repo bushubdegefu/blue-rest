@@ -1,0 +1,71 @@
+package {{.AppName | replaceString}}
+
+//	@title			Swagger {{.AppName }} API
+//	@version		0.1
+//	@description	This is {{.AppName }} API OPENAPI Documentation.
+//	@termsOfService	http://swagger.io/terms/
+//  @BasePath  /api/v1
+
+//	@securityDefinitions.apikey	ApiKeyAuth
+//	@in							header
+//	@name						X-APP-TOKEN
+//	@description				Description for what is this security definition being used
+
+//	@securityDefinitions.apikey Refresh
+//	@in							header
+//	@name						X-REFRESH-TOKEN
+//	@description				Description for what is this security definition being used
+
+import (
+	"fmt"
+
+	"{{.ProjectName}}/{{.AppName}}/controllers"
+	"{{.ProjectName}}/logs"
+	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/logger"
+
+)
+
+func SetupRoutes(app *fiber.App) {
+	log_file, err := logs.Logfile("{{.AppName | replaceString}}")
+	if err != nil {
+		fmt.Printf("Error Creating Logfile %v\n", err)
+		panic(err)
+	}
+
+	// logger middle ware with the custom file writer object
+	app.Use(logger.New(logger.Config{
+		Format:     "\n${cyan}-[${time}]-[${ip}] -${white}${pid} ${red}${status} ${blue}[${method}] ${white}-${path}\n [${body}]\n[${error}]\n[${resBody}]\n[${reqHeaders}]\n[${queryParams}]\n",
+		TimeFormat: "15:04:05",
+		TimeZone:   "Local",
+		Output:     log_file,
+	}))
+
+	// If test mode is enabled, skip the keyauth middleware and allow all requests
+	gapp := app.Group("/api/v1/{{.AppName | replaceString}}")
+
+	//app logging open telemetery
+	gapp.Use(otelspanstarter)
+
+	// database session injection to local context
+	gapp.Use(dbsessioninjection)
+
+	{{ if eq .AuthAppName .AppName }}
+	gapp.Post("/login", controllers.Login).Name("login")
+	{{- end}}
+	gapp.Get("/stats", controllers.DbStatEndpoint).Name("{{.AppName | replaceString}}_db_stat")
+	{{- range .Models}}
+	gapp.Get("/{{.LowerName}}", controllers.Get{{.Name}}s).Name("{{.AppName | replaceString}}_can_view_{{.LowerName}}")
+	gapp.Get("/{{.LowerName}}/:{{.LowerName}}_id", controllers.Get{{.Name}}ByID).Name("{{.AppName | replaceString}}_can_view_{{.LowerName}}")
+	gapp.Post("/{{.LowerName}}", controllers.Post{{.Name}}).Name("{{.AppName | replaceString}}_can_add_{{.LowerName}}")
+	gapp.Patch("/{{.LowerName}}/:{{.LowerName}}_id", controllers.Patch{{.Name}}).Name("{{.AppName | replaceString}}_can_change_{{.LowerName}}")
+	gapp.Delete("/{{.LowerName}}/:{{.LowerName}}_id", controllers.Delete{{.Name}}).Name("{{.AppName | replaceString}}_can_delete_{{.LowerName}}")
+	{{range .Relations}}
+	gapp.Get("/{{.LowerFieldName}}{{.LowerParentName}}/:{{.LowerParentName}}_id",controllers.Get{{.FieldName}}{{.ParentName}}s).Name("{{.AppName | replaceString}}_can_view_{{.LowerFieldName}}")
+	gapp.Get("/{{.LowerFieldName}}complement{{.LowerParentName}}/:{{.LowerParentName}}_id",controllers.Get{{.FieldName}}Complement{{.ParentName}}s).Name("{{.AppName | replaceString}}_can_view_{{.LowerFieldName}}complement")
+	gapp.Get("/{{.LowerFieldName}}noncomplement{{.LowerParentName}}/:{{.LowerParentName}}_id",controllers.Get{{.FieldName}}NonComplement{{.ParentName}}s).Name("{{.AppName | replaceString}}_can_view_{{.LowerFieldName}}complement")
+	gapp.Post("/{{.LowerFieldName}}{{.LowerParentName}}/:{{.LowerFieldName}}_id/:{{.LowerParentName}}_id",controllers.Add{{.FieldName}}{{.ParentName}}s).Name("{{.AppName | replaceString}}_can_add_{{.LowerFieldName}}")
+	gapp.Delete("/{{.LowerFieldName}}{{.LowerParentName}}/:{{.LowerFieldName}}_id/:{{.LowerParentName}}_id",controllers.Delete{{.FieldName}}{{.ParentName}}s).Name("{{.AppName | replaceString}}_can_delete_{{.LowerFieldName}}")
+	{{end}}
+	{{- end}}
+}

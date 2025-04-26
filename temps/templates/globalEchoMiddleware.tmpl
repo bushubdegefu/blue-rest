@@ -1,0 +1,83 @@
+
+package manager
+
+import (
+	"fmt"
+	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
+)
+
+var AppRouteNames map[string]string
+
+func GetApplicationRoutes(app *echo.Echo) {
+	// Lock the Mutex to ensure safe access to AppRouteNames
+
+	AppRouteNames = make(map[string]string)
+	for _, route := range app.Routes() {
+		routeName := route.Name
+		if route.Name == "" {
+			// Skip routes without a name
+			continue
+		}
+		AppRouteNames[route.Path] = routeName
+	}
+}
+
+// SetRouteName header based on path
+func SetRouteNameHeader(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(contx echo.Context) error {
+
+		routeName, exists := AppRouteNames[contx.Path()]
+
+		// If the route name doesn't exist in the map, set it to "not-set"
+		if !exists {
+			routeName = "not-set"
+		}
+
+		// If the x-app-token header is missing, set a default value
+		contx.Request().Header.Set("route-name", routeName)
+
+		// Continue processing the request
+		return next(contx)
+	}
+}
+
+func NextAuthValidator(key string, ctx echo.Context) (bool, error) {
+	// fmt.Println(ctx.Path())
+	if ctx.Path() == "/api/v1/blue_auth/login" || ctx.Path() == "/api/v1/blue_auth/stats" {
+		return true, nil
+	}
+	fmt.Println("Key: ", key)
+	fmt.Println("Route Name: ", ctx.Request().Header.Get("route-name"))
+
+	//  You have to fix the NextAuthValidator function, it will let all values pass
+	// using required role access logic
+	return true, nil
+}
+
+// AddAppTokenIfMissing is a middleware that checks if the x-app-token header is present in the request. so that the login route can work
+func AddAppTokenIfMissing(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(contx echo.Context) error {
+		// Check if x-app-token header exists
+		appToken := contx.Request().Header.Get("x-app-token")
+
+		// If the x-app-token header is missing, set a default value
+		if appToken == "" {
+			contx.Request().Header.Set("x-app-token", "login")
+		}
+
+		// Continue processing the request
+		return next(contx)
+	}
+}
+
+func MountGlobalMiddleware(app *echo.Echo) {
+	// Mount the middleware
+	app.Use(SetRouteNameHeader)
+	app.Use(AddAppTokenIfMissing)
+	app.Use(middleware.KeyAuthWithConfig(middleware.KeyAuthConfig{
+		KeyLookup: "header:x-app-token",
+		Validator: NextAuthValidator,
+	}))
+
+}

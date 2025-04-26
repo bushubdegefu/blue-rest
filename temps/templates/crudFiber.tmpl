@@ -1,48 +1,4 @@
-package temps
 
-import (
-	"fmt"
-	"os"
-	"strings"
-	"text/template"
-)
-
-func CurdFrameFiber() {
-
-	// ############################################################
-
-	curd_tmpl, err := template.New("RenderData").Funcs(FuncMap).Parse(curdTemplateFiber)
-	if err != nil {
-		panic(err)
-	}
-
-	// Create the models directory if it does not exist
-	// #################################################
-	err = os.MkdirAll("controllers", os.ModePerm)
-	if err != nil {
-		panic(err)
-	}
-
-	for _, model := range RenderData.Models {
-
-		folder_path := fmt.Sprintf("controllers/%v_controller.go", model.Name)
-		folder_path = strings.ToLower(folder_path)
-		curd_file, err := os.Create(folder_path)
-		if err != nil {
-			panic(err)
-		}
-		err = curd_tmpl.Execute(curd_file, model)
-		if err != nil {
-			fmt.Println(err)
-			panic(err)
-		}
-		curd_file.Close()
-
-	}
-
-}
-
-var curdTemplateFiber = `
 package controllers
 
 import (
@@ -532,7 +488,7 @@ func Add{{.FieldName}}{{.ParentName}}s(contx *fiber.Ctx) error {
 	}
 
 	tx := db.WithContext(tracer.Tracer).Begin()
-	if err := db.WithContext(tracer.Tracer).Model(&{{.LowerFieldName}}).Association("{{.ParentName}}s").Append(&{{.LowerParentName}}); err != nil {
+	if err := tx.WithContext(tracer.Tracer).Model(&{{.LowerFieldName}}).Association("{{.ParentName}}s").Append(&{{.LowerParentName}}); err != nil {
 		tx.Rollback()
 		return contx.Status(http.StatusNotFound).JSON(common.ResponseHTTP{
 			Success: false,
@@ -805,7 +761,7 @@ func Delete{{.FieldName}}{{.ParentName}}s(contx *fiber.Ctx) error {
 
 	// removing {{.LowerParentName}}
 	tx := db.WithContext(tracer.Tracer).Begin()
-	if err := db.WithContext(tracer.Tracer).Model(&{{.LowerFieldName}}).Association("{{.ParentName}}s").Delete(&{{.LowerParentName}}); err != nil {
+	if err := tx.WithContext(tracer.Tracer).Model(&{{.LowerFieldName}}).Association("{{.ParentName}}s").Delete(&{{.LowerParentName}}); err != nil {
 		tx.Rollback()
 		return contx.Status(http.StatusNonAuthoritativeInfo).JSON(common.ResponseHTTP{
 			Success: false,
@@ -1051,7 +1007,7 @@ func Add{{.FieldName}}{{.ParentName}}s(contx *fiber.Ctx) error {
 
 	tx := db.WithContext(tracer.Tracer).Begin()
 	//  Adding one to many Relation
-	if err := db.WithContext(tracer.Tracer).Model(&{{.LowerParentName}}).Association("{{.FieldName}}s").Append(&{{.LowerFieldName}}); err != nil {
+	if err := tx.WithContext(tracer.Tracer).Model(&{{.LowerParentName}}).Association("{{.FieldName}}s").Append(&{{.LowerFieldName}}); err != nil {
 		tx.Rollback()
 		return contx.Status(http.StatusNotFound).JSON(common.ResponseHTTP{
 			Success: false,
@@ -1131,7 +1087,7 @@ func Delete{{.FieldName}}{{.ParentName}}s(contx *fiber.Ctx) error {
 
 	// Removing {{.FieldName}} From {{.ParentName}}
 	tx := db.WithContext(tracer.Tracer).Begin()
-	if err := db.WithContext(tracer.Tracer).Model(&{{.LowerParentName}}).Association("{{.FieldName}}s").Delete(&{{.LowerFieldName}}); err != nil {
+	if err := tx.WithContext(tracer.Tracer).Model(&{{.LowerParentName}}).Association("{{.FieldName}}s").Delete(&{{.LowerFieldName}}); err != nil {
 		tx.Rollback()
 		return contx.Status(http.StatusNotFound).JSON(common.ResponseHTTP{
 			Success: false,
@@ -1149,4 +1105,3 @@ func Delete{{.FieldName}}{{.ParentName}}s(contx *fiber.Ctx) error {
 	})
 }
 {{- end}}{{- end}}
-`

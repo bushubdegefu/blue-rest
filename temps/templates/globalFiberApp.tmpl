@@ -1,0 +1,246 @@
+package manager
+
+import (
+    "context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"log"
+	"strconv"
+	"time"
+
+	"os"
+	"os/signal"
+	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/gofiber/fiber/v2/middleware/idempotency"
+	"github.com/gofiber/fiber/v2/middleware/limiter"
+	"github.com/gofiber/fiber/v2/middleware/monitor"
+	"github.com/gofiber/fiber/v2/middleware/recover"
+	"github.com/madflojo/tasks"
+	"github.com/spf13/cobra"
+	"github.com/gofiber/swagger"
+	{{- range .AppNames}}
+	{{ . | replaceString }} "{{$.ProjectName}}/{{ . }}"
+	{{- end }}
+	"{{.ProjectName}}/configs"
+	{{- range .AppNames}}
+	{{ . | replaceString }}_tasks "{{$.ProjectName}}/{{ . }}/bluetasks"
+	{{- end }}
+	"{{.ProjectName}}/observe"
+
+
+
+)
+
+var (
+	env string
+	app_otel string
+	app_tls string
+	fibercli= &cobra.Command{
+		Use:   "run",
+		Short: "Run Development or Production server Based on Provided --env=dev flag. Defaults to dev ",
+		Long:  {{.BackTick}}Run {{.AppName}} development server{{.BackTick}},
+		Run: func(cmd *cobra.Command, args []string) {
+			switch env {
+			case "":
+				fiber_run("dev")
+			default:
+				fiber_run(env)
+			}
+		},
+	}
+
+)
+
+
+
+func fiber_run(env string) {
+	prefork := env == "prod"
+	//  Loading Configuration
+	configs.AppConfig.SetEnv(env)
+
+	if app_otel == "on" {
+		// Starting Otel Global tracer
+		tp := observe.InitTracer()
+		defer func() {
+			if err := tp.Shutdown(context.Background()); err != nil {
+				log.Printf("Error shutting down tracer provider: %v", err)
+			}
+		}()
+	}
+
+	// Basic App Configs
+	body_limit, _ := strconv.Atoi(configs.AppConfig.GetOrDefault("BODY_LIMIT", "70"))
+	read_buffer_size, _ := strconv.Atoi(configs.AppConfig.GetOrDefault("READ_BUFFER_SIZE", "70"))
+	//load config file
+	app := fiber.New(fiber.Config{
+		Prefork: prefork,
+		// Network:     fiber.NetworkTCP,
+		// Immutable:   true,
+		JSONEncoder:    json.Marshal,
+		JSONDecoder:    json.Unmarshal,
+		BodyLimit:      body_limit * 1024 * 1024,
+		ReadBufferSize: read_buffer_size * 1024,
+		ErrorHandler: func(ctx *fiber.Ctx, err error) error {
+			// Status code defaults to 500
+			code := fiber.StatusInternalServerError
+			// Retrieve the custom status code if it's a *fiber.Error
+			var e *fiber.Error
+			if errors.As(err, &e) {
+				code = e.Code
+			}
+			// Send custom error page
+			err = ctx.Status(code).SendFile(fmt.Sprintf("./%d.html", code))
+			if err != nil {
+				// In case the SendFile fails
+				return ctx.Status(fiber.StatusInternalServerError).SendString("Internal Server Error")
+			}
+			// Return from handler
+			return nil
+		},
+	})
+
+	// allow cross origin request
+	app.Use(cors.New())
+
+	// setup prom monitoring
+	observe.SetupPrometheusMetrics(app)
+
+	// recover from panic attacks middlerware
+	app.Use(recover.New())
+
+	//  rate limiting middleware
+	rate_limit_per_second, _ := strconv.Atoi(configs.AppConfig.GetOrDefault("RATE_LIMIT_PER_SECOND", "50000"))
+	app.Use(limiter.New(limiter.Config{
+		Max:               rate_limit_per_second,
+		Expiration:        1 * time.Second,
+		LimiterMiddleware: limiter.SlidingWindow{},
+	}))
+
+	// idempotency middleware
+	app.Use(idempotency.New(idempotency.Config{
+		Lifetime: 10 * time.Second,
+	}))
+
+	// Mounting Global Middleware
+	MountGlobalMiddleware(app)
+
+	// Open API Documentation
+	{{- range .AppNames}}
+	//  {{ . }} Swagger Docs
+	app.Static("/{{ . | replaceString}}/docs/doc.json", "./{{ . }}/docs/swagger.json")
+	// Serve {{ . | replaceString }} docs
+	app.Get("/{{ . | replaceString }}/docs/*", swagger.New(swagger.Config{
+		InstanceName: "{{ . | replaceString }}",
+		URL:          "/{{ . | replaceString }}/docs/doc.json", // Match the served JSON file
+	}))
+	{{- end }}
+
+	{{-  if eq .AuthAppType  "standalone" }}
+	app.Static("/", "./dist/django_admin_ui")
+
+	app.Get("/admin/*", func(ctx *fiber.Ctx) error {
+		return ctx.SendFile("./dist/django_admin_ui/index.html")
+	}).Name("Admin_UI")
+
+	{{- end }}	
+	{{- if eq .AuthAppType  "sso" }}
+	app.Static("/", "./dist/sso_admin_ui")
+
+	app.Get("/admin/*", func(ctx *fiber.Ctx) error {
+		return ctx.SendFile("./dist/sso_admin_ui/index.html")
+	}).Name("Admin_UI")
+	{{- end }}
+
+	app.Get("/", func(c *fiber.Ctx) error {
+		return c.SendString("Hello, World!")
+	})
+
+
+	// fiber native monitoring metrics endpoint
+	app.Get("/lmetrics", monitor.New(monitor.Config{Title: "goBlue Metrics Page"})).Name("custom_metrics_route")
+
+	// Setting up Resourse Endpoints
+	// Setting up Endpoints
+	{{- range .AppNames}}
+	{{ . | replaceString }}.SetupRoutes(app)
+	{{- end }}
+
+	// building path route name path for authentication middleware
+	GetApplicationRoutes(app)
+
+
+	// starting tasks
+	{{- range .AppNames}}
+	scd_tasks_{{ . | replaceString }} := {{ . | replaceString }}_tasks.ScheduledTasks()
+	{{- end }}
+
+	//collecting tasks
+	sccheduledTasks := []*tasks.Scheduler{
+	{{- range .AppNames}}
+		scd_tasks_{{ . | replaceString }},
+	{{- end }}
+		}
+
+	// Starting the APP
+	go startServer(app)
+
+
+	// signal for graceful shutdown
+	shutdownChan := make(chan os.Signal, 1)
+
+	// Gracefully shuting Down
+	waitForShutdown(app, sccheduledTasks, shutdownChan)
+}
+
+// waitForShutdown listens for an interrupt signal (such as SIGINT) and gracefully shuts down the Echo app.
+func waitForShutdown(app *fiber.App, scheduledTasks []*tasks.Scheduler, shutdownChan chan os.Signal) {
+	// Create channel to signify a signal being sent
+	signal.Notify(shutdownChan, os.Interrupt) // When an interrupt or termination signal is sent, notify the channel
+
+	<-shutdownChan // This blocks the main thread until an interrupt is received
+	fmt.Println("Gracefully shutting down...")
+	err := app.Shutdown()
+	if err != nil {
+		fmt.Println("Error shutting down app:", err)
+	}
+
+	fmt.Println("Running cleanup tasks...")
+
+	// Your cleanup tasks go here
+	// Iterate through scheduledTasks and stop each one
+	for _, task := range scheduledTasks {
+		task.Stop()
+	}
+	fmt.Println("Gracefully shutting down...")
+	fmt.Println("App was successfully shutdown.")
+}
+
+// start the app function
+func startServer(app *fiber.App) {
+	HTTP_PORT := configs.AppConfig.Get("HTTP_PORT")
+
+	if app_tls == "on" {
+		CERT_FILE := "./server.pem"
+		KEY_FILE := "./server-key.pem"
+		listen_port := "0.0.0.0:" + HTTP_PORT
+		if err := app.ListenTLS(listen_port, CERT_FILE, KEY_FILE); err != nil {
+			fmt.Println("Error starting server with tls certificates:", err)
+		}
+	} else {
+		if err := app.Listen(":" + HTTP_PORT); err != nil {
+			fmt.Println("Error starting server:", err)
+		}
+	}
+}
+
+
+func init() {
+	fibercli.Flags().StringVar(&env, "env", "help", "Which environment to run for example prod or dev")
+	fibercli.Flags().StringVar(&app_otel, "otel", "help", "Turn on/off OpenTelemetry tracing")
+	fibercli.Flags().StringVar(&app_tls, "tls", "help", "Turn on/off tls, \"on\" for auto on and \"off\" for auto off")
+	goFrame.AddCommand(fibercli)
+
+}
+

@@ -1,0 +1,151 @@
+package models
+
+import (
+	"time"
+	"gorm.io/gorm"
+	{{- $break_3 := false }}
+	{{- range .Fields }}
+		{{- if eq .Name "UUID" }}
+			{{- $break_3 = true }}
+		{{- end }}
+	{{- end }}
+
+	{{- if $break_3 }}
+	"github.com/google/uuid"
+	{{- end }}
+
+
+	{{ if and (not (eq .AuthAppName .AppName)) (eq .AuthAppType "standalone") }}
+	{{ .AuthAppName | replaceString }}_models "{{ .ProjectName }}/{{ .AuthAppName }}/models"
+	{{- end }}
+
+	{{- $break_7 := false }}
+	{{- range .Fields }}
+	{{- if eq .Type "sql.NullInt64" }}
+	{{- $break_7 = true }}
+	{{- end }}
+	{{- end }}
+
+	{{- if or (eq $break_7 true) (eq .AuthAppType "standalone") }}
+	"database/sql"
+	{{- end }}
+
+	{{- if eq .AuthAppType "standalone" }}
+	"fmt"
+	"log"
+	{{- end }}
+
+
+
+)
+
+// {{.Name}} Database model info
+// @Description App type information
+type {{.Name}} struct {
+	// The following fields will be ignored by Swagger
+   	CreatedAt time.Time {{.BackTick}}json:"created_at,omitempty"{{.BackTick}}
+    UpdatedAt time.Time {{.BackTick}}json:"updated_at,omitempty"{{.BackTick}}
+    {{range .Fields}} {{.Name}} {{.Type}}  {{.BackTick}}{{.Annotation}}{{.BackTick}}
+{{end}}}
+
+{{- $hasUUID := false }}
+{{- range .Fields}}
+    {{- if eq .Name "UUID" }}
+        {{- $hasUUID = true }}
+    {{- end }}
+{{- end }}
+
+{{- $hasPassword := false }}
+{{- range .Fields}}
+    {{- if eq .Name "Password" }}
+        {{- $hasPassword = true }}
+    {{- end }}
+{{- end }}
+
+{{- if not $hasUUID }}
+func (entity *{{.Name}}) BeforeCreate(tx *gorm.DB) (err error) {
+   	{{- if $hasPassword }}
+  		entity.Password = HashFunc(entity.Password)
+   	{{- end }}
+    entity.CreatedAt = time.Now()
+    return
+}
+{{- end }}
+
+{{- $break_4 := false }}
+{{- range .Fields}}
+{{- if eq .Name "UUID" }}
+func (entity *{{.NormalModelName}}) BeforeCreate(tx *gorm.DB) (err error) {
+	gen, _ := uuid.NewV7()
+	entity.CreatedAt = time.Now();
+	id := gen.String()
+	entity.UUID = id
+	{{- if $hasPassword }}
+  		entity.Password = HashFunc(entity.Password)
+   	{{- end }}
+	return
+}
+{{- $break_4 = true }}
+{{- end}}
+{{- end}}
+
+func (entity *{{.Name}}) BeforeUpdate(tx *gorm.DB) (err error) {
+	entity.UpdatedAt = time.Now();
+	return
+}
+
+{{- if eq .AuthAppType "standalone" }}
+func (entity *{{.Name}}) Populate(tx *gorm.DB) {
+	// Create ContentType for User model
+	contentType := {{ if not (eq .AuthAppName .AppName) }}{{ .AuthAppName | replaceString }}_models.{{- end}}ContentType{
+		AppLabel: "{{ .AppName | replaceString }}",
+		Model:    "{{.LowerName}}",
+	}
+	if err := tx.Create(&contentType).Error; err != nil {
+		log.Fatalf("Failed to create ContentType: %v", err)
+	}
+
+	// Create Permissions for User model
+	permissions := []{{ if not (eq .AuthAppName .AppName) }}{{ .AuthAppName | replaceString }}_models.{{- end}}Permission{
+		{ContentTypeID: sql.NullInt64{Int64: int64(contentType.ID), Valid: true}, Codename: "{{ .AppName | replaceString }}_can_add_{{.LowerName}}"},
+		{ContentTypeID: sql.NullInt64{Int64: int64(contentType.ID), Valid: true}, Codename: "{{ .AppName | replaceString }}_can_view_{{.LowerName}}"},
+		{ContentTypeID: sql.NullInt64{Int64: int64(contentType.ID), Valid: true}, Codename: "{{ .AppName | replaceString }}_can_change_{{.LowerName}}"},
+		{ContentTypeID: sql.NullInt64{Int64: int64(contentType.ID), Valid: true}, Codename: "{{ .AppName | replaceString }}_can_delete_{{.LowerName}}"},
+	}
+
+	for _, permission := range permissions {
+		if err := tx.Create(&permission).Error; err != nil {
+			log.Fatalf("Failed to create Permission: %v", err)
+		}
+	}
+
+	fmt.Println("Populated ContentType and Permissions for {{.Name}} request actions successfully")
+}
+{{- end }}
+
+// {{.Name}}Post model info
+// @Description {{.Name}}Post type information
+type {{.Name}}Post struct {
+  	{{range .Fields}} {{- if .Post}} {{.Name}} {{.Type}} {{.BackTick}}{{.Annotation}}{{.BackTick}}{{- end}}
+{{end}}}
+
+// {{.Name}}Get model info
+// @Description {{.Name}}Get type information
+type {{.Name}}Get struct {
+	{{range .Fields}} {{- if .Get}}	{{.Name}} {{.Type}}  {{.BackTick}}{{.Annotation}}{{.BackTick}} {{- end}}
+	{{end}}
+	CreatedAt time.Time {{.BackTick}}json:"created_at,omitempty"{{.BackTick}}
+	UpdatedAt time.Time {{.BackTick}}json:"updated_at,omitempty"{{.BackTick}}
+}
+
+// {{.Name}}Put model info
+// @Description {{.Name}}Put type information
+type {{.Name}}Put struct {
+	{{range .Fields}} {{- if .Put}} {{.Name}} {{.Type}}  {{.BackTick}}{{.Annotation}}{{.BackTick}}{{- end}}
+{{end}}}
+
+// {{.Name}}Patch model info
+// @Description {{.Name}}Patch type information
+type {{.Name}}Patch struct {
+	{{range .Fields}}{{- if .Patch}}{{.Name}} {{.Type}}  {{.BackTick}}{{.Annotation}}{{.BackTick}}{{- end}}
+{{end}}}

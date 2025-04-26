@@ -1,0 +1,256 @@
+package models
+
+import (
+	"fmt"
+	"log"
+
+	"{{.ProjectName}}/database"
+	"{{.ProjectName}}/configs"
+)
+
+func InitDatabase(test_flag bool) {
+	if !test_flag {
+		configs.NewEnvFile("./configs")
+	}
+	database, err  := database.ReturnSession("{{ .AppName | replaceString }}")
+	fmt.Println("Connection Opened to Database")
+	if err == nil {
+		if err := database.AutoMigrate(
+			{{- range .Models}}
+			&{{.Name}}{},
+			{{- end}}
+		); err != nil {
+			log.Fatalln(err)
+		}
+		fmt.Println("Database Migrated")
+	} else {
+		panic(err)
+	}
+}
+
+func CleanDatabase(test_flag bool) {
+	if !test_flag {
+		configs.NewEnvFile("./configs")
+	}
+	database, err := database.ReturnSession("{{ .AppName | replaceString }}")
+	if err == nil {
+		fmt.Println("Connection Opened to Database")
+		fmt.Println("Dropping Models if Exist")
+		err := database.Migrator().DropTable(
+		{{- range .Models}}
+			&{{.Name}}{},
+		{{- end}}
+		)
+		if err != nil {
+			fmt.Println("Error dropping tables:", err)
+		}
+		fmt.Println("Database Cleaned")
+	} else {
+		panic(err)
+	}
+}
+
+{{ if eq .AuthAppName .AppName }}
+{{- if eq .AuthAppType "standalone" }}
+func CreateSuperUser() {
+	configs.NewEnvFile("./configs")
+	db, err := database.ReturnSession("{{.AuthAppName | replaceString }}")
+	if err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
+	}
+	// Create the superuser
+	user := &User{
+		Username:    "superuser",
+		Email:       "superuser@mail.com",
+		Password:    "default@123",
+		IsSuperuser: true,
+		IsStaff:     true,
+		IsActive:    true,
+		FirstName:   "Super",
+		LastName:    "Admin",
+	}
+
+	// Insert the user into the database
+	if err := db.Create(user).Error; err != nil {
+		fmt.Printf("failed to create superuser: %v\n", err)
+	}
+	db.Commit()
+	fmt.Println("Superuser created successfully")
+
+}
+{{- else if eq .AuthAppType "sso" }}
+func CreateSuperUser() {
+	configs.NewEnvFile("./configs")
+	db, err := database.ReturnSession("{{.AuthAppName | replaceString }}")
+	if err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
+	}
+	// Create the superuser
+	user := &User{
+		Username:    "superuser",
+		Email:       "superuser@mail.com",
+		Password:    "default@123",
+		FirstName:  "Super",
+		MiddleName: "User",
+		Disabled:   false,
+		LastName:    "Admin",
+	}
+
+	// Insert the user into the database
+	if err := db.Create(user).Error; err != nil {
+		fmt.Printf("failed to create superuser: %v\n", err)
+	}
+	db.Commit()
+	fmt.Println("Superuser created successfully")
+}
+
+func ResourceMigration() {
+	configs.NewEnvFile("./configs")
+
+	db, err := database.ReturnSession("{{.AuthAppName | replaceString }}")
+	if err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
+		return
+	}
+
+	// ########################
+	resources := []Resource{
+	{{- range .Models}}
+		{
+			Name: "{{.AppName | replaceString}}_can_view_{{.LowerName}}",
+			Description: "Allows viewing of {{.LowerName}}",
+			Method: "GET",
+			RoutePath: "/{{.AppName | replaceString}}/{{.LowerName}}",
+		},
+		{
+			Name: "{{.AppName | replaceString}}_can_view_{{.LowerName}}_single",
+			Description: "Allows viewing of {{.LowerName}} (single)",
+			Method: "GET",
+			RoutePath: "/{{.AppName | replaceString}}/{{.LowerName}}/:{{.LowerName}}_id",
+		},
+		{
+			Name: "{{.AppName | replaceString}}_can_add_{{.LowerName}}",
+			Description: "Allows creating of {{.LowerName}}",
+			Method: "POST",
+			RoutePath: "/{{.AppName | replaceString}}/{{.LowerName}}",
+		},
+		{
+			Name: "{{.AppName | replaceString}}_can_change_{{.LowerName}}",
+			Description: "Allows Updating of {{.LowerName}}",
+			Method: "PATCH",
+			RoutePath: "/{{.AppName | replaceString}}/{{.LowerName}}/:{{.LowerName}}_id",
+		},
+		{
+			Name: "{{.AppName | replaceString}}_can_delete_{{.LowerName}}",
+			Description: "Allows Deleting of {{.LowerName}}",
+			Method: "DELETE",
+			RoutePath: "/{{.AppName | replaceString}}/{{.LowerName}}/:{{.LowerName}}_id",
+		},
+
+	{{range .Relations}}
+		{
+			Name: "{{.AppName | replaceString}}_can_view_{{.LowerFieldName}}_relation_{{.LowerParentName}}",
+			Description: "Allows Getting of {{.LowerFieldName}}s of {{.LowerParentName}}",
+			Method: "GET",
+			RoutePath: "/{{.AppName | replaceString}}/{{.LowerFieldName}}{{.LowerParentName}}/:{{.LowerParentName}}_id",
+		},
+		{
+			Name: "{{.AppName | replaceString}}_can_view_{{.LowerFieldName}}s_complement_{{.LowerParentName}}",
+			Description: "Allows Getting of all {{.LowerFieldName}}s not attached to {{.LowerParentName}}",
+			Method: "GET",
+			RoutePath: "/{{.AppName | replaceString}}/{{.LowerFieldName}}complement{{.LowerParentName}}/:{{.LowerParentName}}_id",
+		},
+		{
+			Name: "{{.AppName | replaceString}}_can_view_{{.LowerFieldName}}s_attached_{{.LowerParentName}}",
+			Description: "Allows Getting of all {{.LowerFieldName}}s of {{.LowerParentName}}",
+			Method: "GET",
+			RoutePath: "/{{.AppName | replaceString}}/{{.LowerFieldName}}noncomplement{{.LowerParentName}}/:{{.LowerParentName}}_id",
+		},
+		{
+			Name: "{{.AppName | replaceString}}_can_add_{{.LowerFieldName}}s_attached_{{.LowerParentName}}",
+			Description: "Allows Adding {{.LowerFieldName}}s to {{.LowerParentName}}",
+			Method: "POST",
+			RoutePath: "/{{.LowerFieldName}}{{.LowerParentName}}/:{{.LowerFieldName}}_id/:{{.LowerParentName}}_id",
+		},
+		{
+			Name: "{{.AppName | replaceString}}_can_delete_{{.LowerFieldName}}s_attached_{{.LowerParentName}}",
+			Description: "Allows Removing of {{.LowerFieldName}} from {{.LowerParentName}}",
+			Method: "DELETE",
+			RoutePath: "/{{.LowerFieldName}}{{.LowerParentName}}/:{{.LowerFieldName}}_id/:{{.LowerParentName}}_id",
+		},
+		{{end}}
+	{{- end}}
+
+	}
+
+	// ########################
+	if err := db.Create(&resources).Error; err != nil {
+		log.Fatalf("Failed to create resources: %v", err)
+		return
+	}
+	// commit transaction
+	db.Commit()
+
+	log.Println("Successfully created resources")
+}
+{{- else }}
+// No auth app
+{{- end}}
+{{- end }}
+
+{{- if eq .AuthAppType "standalone" }}
+func Populate(test_flag bool) {
+	if !test_flag {
+		configs.NewEnvFile("./configs")
+	}
+	db, err := database.ReturnSession("{{.AuthAppName | replaceString }}")
+	if err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
+	}
+	{{- range .Models}}
+		(&{{.Name}}{}).Populate(db)
+	{{- end}}
+}
+{{- end }}
+
+
+func CreateStatsDatabase() {
+	configs.NewEnvFile("./configs")
+	db, err := database.ReturnSession("{{.AppName | replaceString }}")
+	if err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
+	}
+
+	// Get the underlying *sql.DB
+	sqlDB, err := db.DB()
+	if err != nil {
+		log.Fatalf("Failed to get raw DB instance: %v", err)
+	}
+
+	dropView := {{.BackTick}}DROP VIEW IF EXISTS {{.AuthAppName | replaceString }}_stats;{{.BackTick}}
+	_, err = sqlDB.Exec(dropView)
+	if err != nil {
+		log.Fatalf("Failed to drop existing view: %v", err)
+	}
+
+	rawSQLString := {{.BackTick}}
+	CREATE VIEW "{{.AppName | replaceString }}_stats"  AS
+	SELECT
+	{{- $total := len .Models }}
+	{{- range $index, $model := .Models }}
+		(SELECT COUNT(*) FROM "{{$model.Name | camelToSnake }}s") AS total_{{$model.Name | camelToSnake }}s{{if ne (add $index 1) $total}},{{else}}{{end}}
+	{{- end}}
+	;
+	{{.BackTick}}
+
+	// Execute the raw SQL
+	_, err = sqlDB.Exec(rawSQLString)
+	if err != nil {
+		log.Fatalf("Failed to create view: %v", err)
+	} else {
+		log.Println("Successfully created view: blue_auth_stats")
+	}
+
+	log.Println("{{.AppName | replaceString }}_stats view created successfully")
+}
+

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/bushubdegefu/blue-rest/temps"
+	"github.com/bushubdegefu/blue-rest/temps/generator"
 	"github.com/spf13/cobra"
 )
 
@@ -54,7 +55,9 @@ func runCrudCommand(cmd *cobra.Command, args []string) {
 
 	// Generate CRUD based on the frame type
 	if frame == "echo" || frame == "fiber" {
-		temps.AuthUtilsFrame(appName)
+		temps.ProjectSettings.CurrentAppName = appName
+		generator.GenerateJWTUtils(temps.ProjectSettings)
+		generator.GenerateUtilsApp(temps.ProjectSettings)
 		gengorm(frame)
 
 	} else {
@@ -81,10 +84,10 @@ func runModelsCommand(cmd *cobra.Command, args []string) {
 
 	// Generate models and migrations
 	if modelsType == "init" {
-		temps.ModelDataFrame()
-		temps.MigrationInit()
+		generator.GenerateModels(temps.RenderData)
+
 	} else {
-		temps.ModelDataFrame()
+		generator.GenerateModels(temps.RenderData)
 		temps.CommonCMD()
 	}
 }
@@ -98,7 +101,7 @@ func handleAppDirectoryAndLoadConfig(appName string) error {
 		fmt.Println("Errorr Changing directory")
 		return fmt.Errorf("error changing directory: %v", err)
 	}
-
+	temps.RenderData.AppName = appName
 	if err := temps.LoadData(config_file); err != nil {
 		return fmt.Errorf("error loading data: %v", err)
 	}
@@ -109,10 +112,12 @@ func handleAppDirectoryAndLoadConfig(appName string) error {
 func gengorm(frame string) {
 
 	if frame == "echo" {
-		temps.CurdFrameEcho()
+		generator.GenerateCrudEcho(temps.RenderData)
 	} else if frame == "fiber" {
-		temps.CurdFrameFiber()
-
+		generator.GenerateCrudFiber(temps.RenderData)
+	} else {
+		fmt.Println("Error: Invalid frame value. Use --frame=echo or --frame=fiber.")
+		return
 	}
 	temps.CommonCMD()
 }

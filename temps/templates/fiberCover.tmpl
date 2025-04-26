@@ -1,69 +1,3 @@
-package temps
-
-import (
-	"fmt"
-	"os"
-	"strings"
-	"text/template"
-)
-
-func TestFrameFiber() {
-
-	test_tmpl, err := template.New("RenderData").Funcs(FuncMap).Parse(testTemplateFiber)
-	if err != nil {
-		panic(err)
-	}
-
-	// Create the models directory if it does not exist
-	// #################################################
-	err = os.MkdirAll("tests", os.ModePerm)
-	if err != nil {
-		panic(err)
-	}
-
-	// #################################################
-	err = os.MkdirAll("testsetting", os.ModePerm)
-	if err != nil {
-		panic(err)
-	}
-	test_app_tmpl, err := template.New("RenderData").Funcs(FuncMap).Parse(testAppTemplate)
-	if err != nil {
-		panic(err)
-	}
-	//
-	test_app_file, err := os.Create("testsetting/settings.go")
-	if err != nil {
-		panic(err)
-	}
-
-	err = test_app_tmpl.Execute(test_app_file, RenderData)
-	if err != nil {
-		panic(err)
-	}
-	defer test_app_file.Close()
-	// ###################################################################
-
-	for _, model := range RenderData.Models {
-
-		folder_path := fmt.Sprintf("tests/%v_controller_test.go", model.Name)
-		folder_path = strings.ToLower(folder_path)
-		test_file, err := os.Create(folder_path)
-		if err != nil {
-			panic(err)
-		}
-
-		err = test_tmpl.Execute(test_file, model)
-		if err != nil {
-			panic(err)
-		}
-		test_file.Close()
-
-	}
-
-	// ###################################################################
-}
-
-var testTemplateFiber = `
 package tests
 
 import (
@@ -71,13 +5,16 @@ import (
 	"encoding/json"
 	"fmt"
 	{{- $break := false }}
+
 	{{- range .Fields}}
-		{{- if eq .Type "time.Time" }}
+	{{- if eq .Type "time.Time" }}
+	{{- $break = true }}
+	{{- end}}
+	{{- end}}
+	{{- if $break }}
 	"math/rand"
 	"time"
-		{{- $break = true }}
-		{{- end}}
-	{{- end}}
+	{{- end }}
 	"io"
 
 
@@ -640,34 +577,3 @@ func Test{{.Name}}operations(t *testing.T) {
 	})
 
 }
-
-`
-
-var testAppTemplate = `
-package testsetting
-
-import (
-	{{.AppName | replaceString }} "{{ .ProjectName }}/{{.AppName }}"
-	models "{{.ProjectName}}/{{.AppName | replaceString }}/models"
-	"github.com/gofiber/fiber/v2"
-	"github.com/joho/godotenv"
-)
-
-var (
-	TestApp   *fiber.App
-	GroupPath = "/api/v1/{{.AppName | replaceString }}"
-)
-
-func SetupTestApp() {
-	err := godotenv.Load(".test.env")
-	if err != nil {
-		panic("Error loading .env file")
-	}
-
-	models.InitDatabase(true)
-	TestApp = fiber.New()
-	{{.AppName | replaceString }}.SetupRoutes(TestApp)
-}
-
-
-`

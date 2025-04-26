@@ -1,0 +1,19 @@
+package logs
+
+import (
+	"log"
+	"os"
+	"fmt"
+)
+
+func Logfile(app_name string) (*os.File, error) {
+
+	// Custom File Writer for logging
+	log_file_name := fmt.Sprintf("%s_blue.log", app_name)
+	file, err := os.OpenFile(log_file_name, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	if err != nil {
+		log.Fatalf("error opening file: %v", err)
+		return nil, err
+	}
+	return file, nil
+}

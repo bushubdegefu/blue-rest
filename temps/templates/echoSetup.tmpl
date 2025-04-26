@@ -1,0 +1,68 @@
+
+package {{ .AppName | replaceString }}
+//	@title			Swagger {{.AppName }} API
+//	@version		0.1
+//	@description	This is {{.AppName }} API OPENAPI Documentation.
+//	@termsOfService	http://swagger.io/terms/
+//  @BasePath  /api/v1
+
+//	@securityDefinitions.apikey	ApiKeyAuth
+//	@in							header
+//	@name						X-APP-TOKEN
+//	@description				Description for what is this security definition being used
+
+//	@securityDefinitions.apikey Refresh
+//	@in							header
+//	@name						X-REFRESH-TOKEN
+//	@description				Description for what is this security definition being used
+
+import (
+	"{{.ProjectName}}/{{.AppName}}/controllers"
+	"{{.ProjectName}}/logs"
+	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
+)
+
+
+//  Please Note the sequence you mount the middlewares
+func SetupRoutes(app *echo.Echo) {
+	logOutput, _ := logs.Logfile("{{ .AppName | replaceString }}")
+
+	app.Use(middleware.LoggerWithConfig(middleware.LoggerConfig{
+		Format: {{.BackTick}}{"time":"${time_rfc3339_nano}","id":"${id}","remote_ip":"${remote_ip}",{{.BackTick}} +
+			{{.BackTick}}"host":"${host}","method":"${method}","uri":"${uri}","user_agent":"${user_agent}",{{.BackTick}} +
+			{{.BackTick}}"status":${status},"error":"${error}","latency":${latency},"latency_human":"${latency_human}"{{.BackTick}} +
+			{{.BackTick}},"bytes_in":${bytes_in},"bytes_out":${bytes_out}}{{.BackTick}} + "\n",
+		Output: logOutput,
+	}))
+
+	// then authentication middlware
+	gapp := app.Group("/api/v1/{{.AppName | replaceString}}")
+
+	// the Otel spanner middleware
+	gapp.Use(otelechospanstarter)
+
+	// db session injection
+	gapp.Use(dbsessioninjection)
+
+	{{ if eq .AuthAppName .AppName }}
+	gapp.POST("/login", controllers.Login).Name = "login"
+	{{- end}}
+	{{- range .Models}}
+	gapp.GET("/stats", controllers.DbStatEndpoint).Name = "{{.AppName | replaceString}}_db_stat"
+	gapp.GET("/{{.LowerName}}", controllers.Get{{.Name}}s).Name = "{{.AppName | replaceString}}_can_view_{{.LowerName}}"
+	gapp.GET("/{{.LowerName}}/:{{.LowerName}}_id", controllers.Get{{.Name}}ByID).Name = "{{.AppName | replaceString}}_can_view_{{.LowerName}}"
+	gapp.POST("/{{.LowerName}}", controllers.Post{{.Name}}).Name = "{{.AppName | replaceString}}_can_add_{{.LowerName}}"
+	gapp.PATCH("/{{.LowerName}}/:{{.LowerName}}_id", controllers.Patch{{.Name}}).Name = "{{.AppName | replaceString}}_can_change_{{.LowerName}}"
+	gapp.DELETE("/{{.LowerName}}/:{{.LowerName}}_id", controllers.Delete{{.Name}}).Name = "{{.AppName | replaceString}}_can_delete_{{.LowerName}}"
+	{{range .Relations}}
+	gapp.GET("/{{.LowerFieldName}}{{.LowerParentName}}/:{{.LowerParentName}}_id",controllers.Get{{.FieldName}}{{.ParentName}}s).Name = "{{.AppName | replaceString}}_can_view_{{.LowerFieldName}}"
+	gapp.GET("/{{.LowerFieldName}}complement{{.LowerParentName}}/:{{.LowerParentName}}_id",controllers.Get{{.FieldName}}Complement{{.ParentName}}s).Name = "{{.AppName | replaceString}}_can_view_{{.LowerFieldName}}complement"
+	gapp.GET("/{{.LowerFieldName}}noncomplement{{.LowerParentName}}/:{{.LowerParentName}}_id",controllers.Get{{.FieldName}}NonComplement{{.ParentName}}s).Name = "{{.AppName | replaceString}}_can_view_{{.LowerFieldName}}complement"
+	gapp.POST("/{{.LowerFieldName}}{{.LowerParentName}}/:{{.LowerFieldName}}_id/:{{.LowerParentName}}_id",controllers.Add{{.FieldName}}{{.ParentName}}s).Name = "{{.AppName | replaceString}}_can_add_{{.LowerFieldName}}"
+	gapp.DELETE("/{{.LowerFieldName}}{{.LowerParentName}}/:{{.LowerFieldName}}_id/:{{.LowerParentName}}_id",controllers.Delete{{.FieldName}}{{.ParentName}}s).Name = "{{.AppName | replaceString}}_can_delete_{{.LowerFieldName}}"
+	{{end}}
+	{{- end}}
+
+
+}

@@ -1,0 +1,59 @@
+package bluetasks
+
+import (
+	"fmt"
+	"os/exec"
+	"strconv"
+	"time"
+
+	"{{.ProjectName}}/configs"
+	"{{.ProjectName}}/logs"
+	"{{.ProjectName}}/database"
+
+	"github.com/madflojo/tasks"
+)
+
+func ScheduledTasks() *tasks.Scheduler {
+
+	//  initalizing scheduler for regullarly running tasks
+	scheduler := tasks.New()
+
+
+	// // Add a task to move to Logs Directory Every Interval, Interval to Be Provided From Configuration File
+	gormLoggerfile, _ := database.GormLoggerFile("{{ .AppName | replaceString }}")
+	//  App should not start
+	log_file, _ := logs.Logfile("{{ .AppName | replaceString }}")
+	// Getting clear log interval from env
+	clearIntervalLogs, _ := strconv.Atoi(configs.AppConfig.GetOrDefault("CLEAR_LOGS_INTERVAL", "1440"))
+	if _, err := scheduler.Add(&tasks.Task{
+		Interval: time.Duration(clearIntervalLogs) * time.Minute,
+		TaskFunc: func() error {
+			currentTime := time.Now()
+			FileName := fmt.Sprintf("%v-%v-%v-%v-%v", currentTime.Year(), currentTime.Month(), currentTime.Day(), currentTime.Hour(), currentTime.Minute())
+			//  make sure to replace the names of log files correctly here
+			Command := fmt.Sprintf("cp {{ .AppName | replaceString }}_blue.log logs/{{ .AppName | replaceString }}_blue-%v.log", FileName)
+			Command2 := fmt.Sprintf("cp {{ .AppName | replaceString }}_gorm.log logs/{{ .AppName | replaceString }}_gorm-%v.log", FileName)
+			if _, err := exec.Command("bash", "-c", Command).Output(); err != nil {
+				fmt.Printf("error: %v\n", err)
+			}
+
+			if _, err := exec.Command("bash", "-c", Command2).Output(); err != nil {
+				fmt.Printf("error: %v\n", err)
+			}
+
+			err := gormLoggerfile.Truncate(0)
+			if err != nil {
+				fmt.Println("Error truncating gorm logger file:", err)
+			}
+			lerr := log_file.Truncate(0)
+			if lerr != nil {
+				fmt.Println("Error truncating log file:", err)
+			}
+			return nil
+		},
+	}); err != nil {
+		fmt.Println(err)
+	}
+
+	return scheduler
+}

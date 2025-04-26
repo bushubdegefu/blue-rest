@@ -1,0 +1,98 @@
+package oauth
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+
+	"github.com/labstack/echo/v4"
+	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/microsoft"
+	"gorm.io/gorm"
+)
+
+var (
+	// Microsoft OAuth configuration
+	microsoftConf = &oauth2.Config{
+		ClientID:     "your-microsoft-client-id",     // Replace with your Microsoft Client ID
+		ClientSecret: "your-microsoft-client-secret", // Replace with your Microsoft Client Secret
+		RedirectURL:  "your-microsoft-redirect-uri",  // Replace with your Microsoft Redirect URI
+		Scopes:       []string{"User.Read"},
+		Endpoint:     microsoft.AzureADEndpoint("common"),
+	}
+)
+
+// MicrosoftUserProfile represents the structure of the user profile response from Microsoft.
+type MicrosoftUserProfile struct {
+	ID          string {{.BackTick}}json:"id"{{.BackTick}}
+	DisplayName string {{.BackTick}}json:"displayName"{{.BackTick}}
+	GivenName   string {{.BackTick}}json:"givenName"{{.BackTick}}
+	Surname     string {{.BackTick}}json:"surname"{{.BackTick}}
+	Email       string {{.BackTick}}json:"mail"{{.BackTick}}
+}
+
+// GetMicrosoftLoginURL generates the URL for the user to login with Microsoft.
+func GetMicrosoftLoginURL(state string) string {
+	return microsoftConf.AuthCodeURL(state)
+}
+
+// GetMicrosoftProfile retrieves the user's profile information from Microsoft.
+func GetMicrosoftProfile(code string, db *gorm.DB) (*MicrosoftUserProfile, error) {
+	var response struct {
+		User MicrosoftUserProfile {{.BackTick}}json:"user"{{.BackTick}}
+	}
+
+	token, err := microsoftConf.Exchange(context.Background(), code)
+	if err != nil {
+		return nil, fmt.Errorf("failed to exchange token: %w", err)
+	}
+
+	client := microsoftConf.Client(context.Background(), token)
+	resp, err := client.Get("https://graph.microsoft.com/v1.0/me")
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch user info: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read body: %w", err)
+	}
+
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal profile: %w", err)
+	}
+
+	// Check if the user already exists in the database
+	createUserIfNotExistsMicrosoft(db, &response.User)
+
+	return &response.User, nil
+}
+
+// LoginHandlerMicrosoft handles the login route and redirects to the Microsoft login URL.
+func LoginHandlerMicrosoft(contx echo.Context) error {
+	state := generateUUID() // Replace with a proper state generator for security
+	loginURL := GetMicrosoftLoginURL(state)
+	return contx.Redirect(http.StatusTemporaryRedirect, loginURL)
+}
+
+// CallbackHandlerMicrosoft handles the callback from Microsoft after authentication.
+func CallbackHandlerMicrosoft(contx echo.Context) error {
+	//  Geting dbsession from local
+	db := contx.Get("db").(*gorm.DB)
+
+	code := contx.QueryParam("code")
+	if code == "" {
+		return contx.JSON(http.StatusBadRequest, map[string]string{"error": "code not provided"})
+	}
+
+	profile, err := GetMicrosoftProfile(code, db)
+	if err != nil {
+		return contx.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+
+	return contx.JSON(http.StatusOK, profile)
+}

@@ -1,0 +1,106 @@
+package manager
+
+import (
+	"fmt"
+	"regexp"
+	"strings"
+
+	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/keyauth"
+)
+
+var (
+	protectedURLs = []*regexp.Regexp{
+		regexp.MustCompile("^/api/v1/blue_auth/login"),
+		regexp.MustCompile("^/api/v1/checklogin"),
+		regexp.MustCompile("^/lmetrics"),
+		regexp.MustCompile("^/docs"),
+		regexp.MustCompile("^/metrics$"),
+	}
+	AppRouteNames map[string]string
+
+)
+// this is path filter which wavies token requirement for provided paths
+func authFilter(c *fiber.Ctx) bool {
+	originalURL := strings.ToLower(c.OriginalURL())
+
+	for _, pattern := range protectedURLs {
+		if pattern.MatchString(originalURL) {
+			c.Request().Header.Add("X-APP-TOKEN", "allowed")
+			return true
+		}
+	}
+	return false
+}
+
+
+// GetApplicationRoutes sets up the route names for the Fiber app.
+func GetApplicationRoutes(app *fiber.App) {
+
+	// Clear the map before populating it
+	AppRouteNames = make(map[string]string)
+
+	for _, route := range app.GetRoutes() {
+		routeName := route.Name
+		if route.Name == "" {
+			// Skip routes without a name
+			routeName = "not-set"
+		}
+		AppRouteNames[route.Path] = routeName
+	}
+	// fmt.Println("AppRouteNames", AppRouteNames)
+
+}
+
+
+// SetRouteNameHeader sets a custom header based on the route path.
+func SetRouteNameHeader(ctx *fiber.Ctx) error {
+	routeName, exists := AppRouteNames[ctx.Path()]
+
+	// If the route name doesn't exist in the map, set it to "not-set"
+	if !exists {
+		routeName = "not-set"
+	}
+
+	// Set the route-name header
+	ctx.Request().Header.Add("route-name", routeName)
+
+	// Continue processing the request
+	return ctx.Next()
+}
+
+// NextAuthValidator validates the x-app-token for NextAuth middleware
+func NextAuthValidator(ctx *fiber.Ctx, key string) (bool, error) {
+	// You can validate the token or path here.
+	routeName := AppRouteNames[ctx.Path()]
+	fmt.Println(key)
+	fmt.Println(routeName)
+	// Implement your role-based access logic here
+	return true, nil
+}
+
+// AddAppTokenIfMissing ensures the x-app-token header is set for missing values.
+func AddAppTokenIfMissing(ctx *fiber.Ctx) error {
+	// Check if x-app-token header exists
+	appToken := ctx.Get("X-APP-TOKEN")
+
+	// If missing, set a default value
+	if appToken == "" {
+		ctx.Request().Header.Add("X-APP-TOKEN", "login")
+	}
+
+	// Continue processing the request
+	return ctx.Next()
+}
+
+// MountGlobalMiddleware mounts the global middleware in the Fiber app.
+func MountGlobalMiddleware(app *fiber.App) {
+	// Mount the middleware
+	app.Use(SetRouteNameHeader)
+	app.Use(AddAppTokenIfMissing)
+	app.Use(keyauth.New(keyauth.Config{
+		Next:      authFilter,
+		KeyLookup: "header:X-APP-TOKEN",
+		Validator: NextAuthValidator,
+	}))
+}

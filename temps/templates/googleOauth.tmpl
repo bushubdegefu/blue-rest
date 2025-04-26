@@ -1,0 +1,109 @@
+package oauth
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"log"
+	"net/http"
+
+	"{{ .ProjectName }}/configs"
+	"github.com/labstack/echo/v4"
+	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/google"
+	"gorm.io/gorm"
+)
+
+var (
+	// Oauth config manage the OAuth flow. You have to register
+	// the redirect url in the OAuth provider. For the endpoint,
+	// there are many provider specific package inside the
+	// golang.org/x/oauth2 package
+	conf = &oauth2.Config{
+		ClientID:     configs.AppConfig.Get("GOOGLE_CLIENT_ID"),
+		ClientSecret: configs.AppConfig.Get("GOOGLE_CLIENT_SECRET"),
+		RedirectURL:  configs.AppConfig.Get("GOOGLE_REDIRECT_URI"),
+		Scopes:       []string{"email", "profile"},
+		Endpoint:     google.Endpoint,
+	}
+)
+
+// GoogleUserProfile represents the structure of the user profile response from Google.
+type GoogleUserProfile struct {
+	Sub           string {{.BackTick}}json:"sub"{{.BackTick}}            // The unique identifier for the user
+	Name          string {{.BackTick}}json:"name"{{.BackTick}}           // Full name of the user
+	GivenName     string {{.BackTick}}json:"given_name"{{.BackTick}}     // First name
+	FamilyName    string {{.BackTick}}json:"family_name"{{.BackTick}}    // Last name
+	Picture       string {{.BackTick}}json:"picture"{{.BackTick}}        // URL to the user's profile picture
+	Email         string {{.BackTick}}json:"email"{{.BackTick}}          // Email address
+	EmailVerified bool   {{.BackTick}}json:"email_verified"{{.BackTick}} // Whether the email is verified
+	Locale        string {{.BackTick}}json:"locale"{{.BackTick}}         // User's locale
+}
+
+// GetLoginURL generates the URL for the user to login with Google.
+func GetLoginURL(state string) string {
+	return conf.AuthCodeURL(state)
+}
+
+// GetProfile retrieves the user's profile information from Google.
+func GetProfile(code string, db *gorm.DB) (*GoogleUserProfile, error) {
+	var response struct {
+		User GoogleUserProfile {{.BackTick}}json:"user"{{.BackTick}}
+	}
+
+	token, err := conf.Exchange(context.Background(), code)
+	if err != nil {
+		return nil, fmt.Errorf("failed to exchange token: %w", err)
+	}
+
+	client := conf.Client(context.Background(), token)
+	resp, err := client.Get("https://www.googleapis.com/oauth2/v3/userinfo")
+	if err != nil {
+		log.Println("Failed to fetch user info:", err)
+		return nil, fmt.Errorf("failed to fetch user info: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read body: %w", err)
+	}
+
+	// var profile map[string]interface{}
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal profile: %w", err)
+	}
+
+	// Check if the user already exists in the database
+	createUserIfNotExistsGoogle(db, &response.User)
+
+	return &response.User, nil
+}
+
+// LoginHandler handles the login route and redirects to the Google login URL.
+func LoginHandler(contx echo.Context) error {
+	state := generateUUID() // Replace with a proper state generator for security
+	loginURL := GetLoginURL(state)
+	return contx.Redirect(http.StatusTemporaryRedirect, loginURL)
+}
+
+// CallbackHandler handles the callback from Google after authentication.
+func CallbackHandler(contx echo.Context) error {
+
+	//  Geting dbsession from local
+	db := contx.Get("db").(*gorm.DB)
+
+	code := contx.QueryParam("code")
+	if code == "" {
+		return contx.JSON(http.StatusBadRequest, map[string]string{"error": "code not provided"})
+	}
+
+	profile, err := GetProfile(code, db)
+	if err != nil {
+		return contx.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+
+	return contx.JSON(http.StatusOK, profile)
+}
