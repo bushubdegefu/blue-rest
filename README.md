@@ -7,7 +7,7 @@ Blue Rest is a command-line tool designed to structure Golang backend projects w
 To install Blue Rest, run:
 
 ```bash
- go install github.com/bushubdegefu/blue-rest@latest
+ go install github.com/bushubdegefu/blue-rest@v0.2.4
 ```
 ## Folder Structure Overview
 
