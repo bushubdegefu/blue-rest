@@ -7,5 +7,5 @@ import (
 func GenerateEchoLogin(data temps.ProjectSetting) {
 	tmpl := temps.LoadTemplate("echoLogin")
 
-	temps.WriteTemplateToFileSetting("controllers/login.go", tmpl, data)
+	temps.WriteTemplateToFileSetting("controllers/app.go", tmpl, data)
 }

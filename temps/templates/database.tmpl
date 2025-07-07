@@ -115,8 +115,9 @@ func ReturnSession(app_name string) (*gorm.DB,error) {
 			fmt.Printf("Error during connecting to database: %v\n", err)
 			return nil, err
 		}
-		sqlDB.SetMaxOpenConns(10)
-		sqlDB.SetConnMaxLifetime(5 * time.Second)
+		sqlDB.SetMaxOpenConns(100)
+		sqlDB.SetMaxIdleConns(20)
+		sqlDB.SetConnMaxLifetime(30 * time.Minute)
 		DBSession = db
 	default:
 			return nil, fmt.Errorf("database type not supported")

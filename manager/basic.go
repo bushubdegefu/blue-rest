@@ -99,6 +99,7 @@ var (
 func handleAppInitialization(appName, currentDir, authAppName string) {
 
 	temps.RenderData.AppName = appName
+	temps.RenderData.ProjectName = temps.ProjectSettings.ProjectName
 	temps.ProjectSettings.AppendAppName(appName, authAppName)
 	// Create app directory and switch to it
 	os.Mkdir(appName, os.ModePerm)
@@ -179,12 +180,12 @@ func handleProjectType(projectType, frame string, cmd *cobra.Command) {
 	case "consumer":
 		standardrabbit()
 		handleFrame(frame)
-		temps.GenericTracerTemplate()
+		generator.GenerateTracerGenericSetup(temps.RenderData)
 		temps.CommonCMD()
 	case "producer":
 		standpublish()
 		handleFrame(frame)
-		temps.GenericTracerTemplate()
+		generator.GenerateTracerGenericSetup(temps.RenderData)
 		temps.CommonCMD()
 	case "tasks":
 		appName, _ := cmd.Flags().GetString("app")
@@ -212,6 +213,8 @@ func handleProjectType(projectType, frame string, cmd *cobra.Command) {
 			temps.RenderData.AuthAppName = temps.ProjectSettings.AuthAppName
 			temps.RenderData.AppName = temps.ProjectSettings.AuthAppName
 			temps.RenderData.AppNames = temps.ProjectSettings.AppNames
+			temps.RenderData.ProjectName = temps.ProjectSettings.ProjectName
+			temps.RenderData.AuthAppType = temps.ProjectSettings.AuthAppType
 			generator.GenerateAppDatabaseMigration(temps.RenderData)
 			temps.CommonCMD()
 		}
@@ -221,20 +224,27 @@ func handleProjectType(projectType, frame string, cmd *cobra.Command) {
 }
 
 func handleOtelFrame(frame string) {
-	if frame == "echo" || frame == "fiber" {
-		temps.StandardTracerFrame(frame)
-		temps.PrometheusTracerFrame(frame)
+	if frame == "fiber" {
+		generator.GenerateTracerFiberSetup(temps.RenderData)
+		generator.GeneratePromMetricsSetup(temps.RenderData, frame)
+	} else if frame == "echo" {
+		generator.GenerateTracerEchoSetup(temps.RenderData)
+		generator.GeneratePromMetricsSetup(temps.RenderData, frame)
 	} else {
 		fmt.Println("Unknown frame specified. Valid frames are: echo, fiber.")
 	}
 }
 
 func handleFrame(frame string) {
-	if frame == "echo" || frame == "fiber" {
-		temps.StandardTracerFrame(frame)
-		temps.PrometheusTracerFrame(frame)
+	if frame == "echo" {
+		generator.GenerateTracerEchoSetup(temps.RenderData)
+		generator.GeneratePromMetricsSetup(temps.RenderData, frame)
+
+	} else if frame == "fiber" {
+		generator.GenerateTracerFiberSetup(temps.RenderData)
+		generator.GeneratePromMetricsSetup(temps.RenderData, frame)
 	} else {
-		temps.StandardTracerFrame(frame)
+		fmt.Println("Unknown frame specified. Valid frames are: echo, fiber.")
 	}
 }
 

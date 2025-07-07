@@ -32,12 +32,12 @@ var (
 				}
 				generator.GenerateFiberAppMiddleware(temps.RenderData)
 				generator.GenerateFiberSetup(temps.RenderData)
+				temps.ProjectSettings.CurrentAppName = appName
 				if appName == temps.ProjectSettings.AuthAppName {
-					temps.ProjectSettings.CurrentAppName = appName
 					generator.GenerateJWTUtils(temps.ProjectSettings)
-					generator.GenerateUtilsApp(temps.ProjectSettings)
-					loginFrame(appName, "echo")
 				}
+				generator.GenerateUtilsApp(temps.ProjectSettings)
+				loginFrame(appName, "echo")
 
 			} else if globalName {
 				generator.GenerateGlobalEchoAppMiddleware(temps.RenderData)
@@ -53,8 +53,8 @@ var (
 
 func loginFrame(appName, frame string) {
 	temps.ProjectSettings.CurrentAppName = appName
-	generator.GenerateJWTUtils(temps.ProjectSettings)
-	generator.GenerateUtilsApp(temps.ProjectSettings)
+	// generator.GenerateJWTUtils(temps.ProjectSettings)
+	// generator.GenerateUtilsApp(temps.ProjectSettings)
 	temps.ProjectSettings.Models = temps.RenderData.Models
 	// Generate login frame
 	if frame == "fiber" {

@@ -108,7 +108,7 @@
           {
             "name": "Email",
             "type": "string",
-            "annotation": "gorm:\"not null; unique;\" json:\"email,omitempty\"",
+            "annotation": "gorm:\"not null; unique; type:string;\" json:\"email,omitempty\"",
             "curd_flag": "true$true$true$true$false$false"
           },
           {
@@ -179,13 +179,13 @@
           },
           {
             "name": "GoogleID",
-            "type": "string",
+            "type": "*string",
             "annotation": "gorm:\"unique; index\" json:\"google_id,omitempty\"",
             "curd_flag": "true$false$false$false$false$false"
           },
           {
             "name": "MicrosoftID",
-            "type": "string",
+            "type": "*string",
             "annotation": "gorm:\"unique; index\" json:\"microsoft_id,omitempty\"",
             "curd_flag": "true$false$false$false$false$false"
           },

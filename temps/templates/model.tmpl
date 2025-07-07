@@ -14,6 +14,17 @@ import (
 	"github.com/google/uuid"
 	{{- end }}
 
+	{{- $break_9 := false }}
+	{{- range .Fields }}
+		{{- if eq .Name "json.RawMessage" }}
+			{{- $break_9 = true }}
+		{{- end }}
+	{{- end }}
+
+	{{- if $break_9 }}
+	"encoding/json"
+	{{- end }}
+
 
 	{{ if and (not (eq .AuthAppName .AppName)) (eq .AuthAppType "standalone") }}
 	{{ .AuthAppName | replaceString }}_models "{{ .ProjectName }}/{{ .AuthAppName }}/models"

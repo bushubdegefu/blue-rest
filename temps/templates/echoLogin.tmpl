@@ -2,12 +2,15 @@ package controllers
 
 import (
 	"net/http"
+
+	{{- if eq .AuthAppName .CurrentAppName }}
 	"time"
 	"fmt"
 
 	"{{.ProjectName}}/{{ .CurrentAppName}}/models"
 	"{{.ProjectName}}/{{ .CurrentAppName}}/utils"
 
+	{{- end }}
 	"{{.ProjectName}}/common"
 	"{{.ProjectName}}/observe"
 	"github.com/go-playground/validator/v10"
@@ -15,6 +18,7 @@ import (
 	"gorm.io/gorm"
 )
 
+{{- if eq .AuthAppName .CurrentAppName }}
 // Login Request for Endpoint
 type LoginPost struct {
 	GrantType string {{.BackTick}}json:"grant_type" validate:"required" example:"authorization_code,refresh_token,token_decode"{{.BackTick}}
@@ -388,6 +392,7 @@ func Login(contx echo.Context) error {
 		})
 	}
 }
+{{- end }}
 {{- end }}
 
 // ###############################################################################

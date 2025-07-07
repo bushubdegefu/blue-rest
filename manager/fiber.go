@@ -36,9 +36,9 @@ var (
 				if appName == temps.ProjectSettings.AuthAppName {
 					temps.ProjectSettings.CurrentAppName = appName
 					generator.GenerateJWTUtils(temps.ProjectSettings)
-					generator.GenerateUtilsApp(temps.ProjectSettings)
-					loginFrame(appName, "fiber")
 				}
+				generator.GenerateUtilsApp(temps.ProjectSettings)
+				loginFrame(appName, "fiber")
 
 			} else if globalName {
 				generator.GenerateGlobalFiberAppMiddleware(temps.RenderData)

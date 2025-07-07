@@ -62,14 +62,12 @@ func Get{{.Name}}s(contx *fiber.Ctx) error {
 	}
 
 	// Getting search fields
+	queryParams := contx.Queries()
 	searchTerm := make(map[string]any)
-		if err := contx.Bind(searchTerm); err != nil {
-			return contx.Status(http.StatusBadRequest).JSON(common.ResponseHTTP{
-				Success: false,
-				Message: err.Error(),
-				Data:    nil,
-			})
-		}
+	for key, value := range queryParams {
+		searchTerm[key] = value
+	}
+
 
 	allowedKeys := []string{ {{.SearchFields | formatSliceToString}} }
 	filteredSearchTerm := common.FilterMapByKeys(searchTerm, allowedKeys)

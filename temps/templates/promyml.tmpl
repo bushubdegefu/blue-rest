@@ -1,0 +1,8 @@
+global:
+  scrape_interval: 15s  # How frequently to scrape targets
+
+scrape_configs:
+  - job_name: 'example-job'
+    static_configs:
+      - targets: ['localhost:7500']  # Scrape metrics from localhost:7500
+    metrics_path: '/metrics'  # Default path is /metrics, but can be set explicitly

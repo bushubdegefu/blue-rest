@@ -47,16 +47,23 @@ func runCrudCommand(cmd *cobra.Command, args []string) {
 	}
 
 	temps.RenderData.AppName = appName
+	temps.RenderData.ProjectName = temps.ProjectSettings.ProjectName
 	// Change to the app's directory and load the config data
 	if err := handleAppDirectoryAndLoadConfig(appName); err != nil {
 		fmt.Println(err)
 		return
 	}
 
+	if appName == temps.ProjectSettings.AuthAppName {
+		temps.ProjectSettings.CurrentAppName = appName
+		generator.GenerateJWTUtils(temps.ProjectSettings)
+		generator.GenerateUtilsApp(temps.ProjectSettings)
+	}
+
 	// Generate CRUD based on the frame type
 	if frame == "echo" || frame == "fiber" {
 		temps.ProjectSettings.CurrentAppName = appName
-		generator.GenerateJWTUtils(temps.ProjectSettings)
+		// generator.GenerateJWTUtils(temps.ProjectSettings)
 		generator.GenerateUtilsApp(temps.ProjectSettings)
 		gengorm(frame)
 

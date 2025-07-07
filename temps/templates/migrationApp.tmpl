@@ -61,16 +61,18 @@ func init_migrate() {
 func populate_migrate() {
 {{- if eq .AuthAppType "standalone" }}
     {{- range .AppNames }}
-    {{ . | replaceString }}.Populate(false)
+        {{ replaceString . }}.Populate(false)
     {{- end }}
     fmt.Println("Auth Populated Successfully. Database Models populated successfully.")
-{{- else if eq .AuthAppType "sso" }}
+{{- end }}
+
+{{- if eq .AuthAppType "sso" }}
     {{- range .AppNames }}
-    {{ . | replaceString }}.ResourceMigration()
+        {{ replaceString . }}.ResourceMigration()
     {{- end }}
     fmt.Println("Admin Resources Created Successfully. Database Models populated successfully.")
 {{- end }}
-    fmt.Println("Resources Metadata Created to Database Models successfully.")
+
 }
 
 func create_views() {

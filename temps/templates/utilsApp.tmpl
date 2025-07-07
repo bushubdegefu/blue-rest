@@ -3,12 +3,14 @@ package utils
 import (
 	"fmt"
 	"reflect"
+	{{- if eq .AuthAppName .CurrentAppName }}
 	"time"
-
 	"{{.ProjectName}}/{{.CurrentAppName}}/models"
 	"github.com/golang-jwt/jwt/v5"
+	{{- end }}
 )
 
+{{- if eq .AuthAppName .CurrentAppName }}
 type UserClaim struct {
 	jwt.RegisteredClaims
 	Email       string   {{.BackTick}}json:"email"{{.BackTick}}
@@ -90,6 +92,8 @@ func ParseJWTToken(jwtToken string) (UserClaim, error) {
 	return response_a, nil
 
 }
+
+{{- end }}
 
 // Return Unique values in list
 func UniqueSlice(slice []string) []string {
