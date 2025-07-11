@@ -30,8 +30,9 @@ var (
 					fmt.Printf("Error loading data: %v\n", err)
 					return
 				}
-				generator.GenerateFiberAppMiddleware(temps.RenderData)
-				generator.GenerateFiberSetup(temps.RenderData)
+				// generator.GenerateFiberAppMiddleware(temps.RenderData)
+				generator.GenerateEchoAppMiddleware(temps.RenderData)
+				generator.GenerateEchoSetup(temps.RenderData)
 				temps.ProjectSettings.CurrentAppName = appName
 				if appName == temps.ProjectSettings.AuthAppName {
 					generator.GenerateJWTUtils(temps.ProjectSettings)
